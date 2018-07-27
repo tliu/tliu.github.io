@@ -4,11 +4,31 @@ body {
   margin: 6px;
 }
 
+.text-container {
+  color: #fff;
+  float: left;
+  height: 100%;
+}
+
+.fl {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  margin: 6px;
+}
+
+.rb {
+  writing-mode: tb-rl;
+  transform: rotate(-180deg);
+}
+
+
 .lane-container {
   display: inline-block;
   width: 6.25%;
   height: 100%;
   padding: 6px;
+  float: right;
 }
 
 .truck-container {
