@@ -3,12 +3,12 @@ const TEMPLATES = {
   lane: Hogan.compile(`<div class="lane-container">
                         <div class="truck-container">
                           <div class="truck" id="truck-{{number}}">
-                          40%
+                          {{truck.fill}}%
                           </div>
                         </div>
                         <div class="chute-container">
                           <div class="chute" id="chute-{{number}}">
-                            40%
+                          {{chute.fill}}%
                           </div>
                         </div>
                         <div id="lane-{{number}}" class="lane">
@@ -17,7 +17,7 @@ const TEMPLATES = {
                         <div class="number">{{number}}</div>
                        </div>`),
   zone: Hogan.compile(`<div class="zone-container">
-                         <div id="zone-{{lane}}-{{id}}" class="zone {{status}}"></div>
+                         <div id="zone-{{lane}}-{{id}}" class="zone"></div>
                        </div>`)
 }
 
@@ -25,148 +25,77 @@ let lanes = [];
 
 window.onload = () => {
   let body = "";
-  for (let i = 0; i < 16; i++) {
-    let zones = "";
-    const status = Math.random() > .33 ? "moving" : "braking";
-    for (let j = 0; j < 24; j++) {
-      zones += TEMPLATES.zone.render({ lane: i + 602, id: j, status: status});
-    }
-    body += TEMPLATES.lane.render({ zones: zones,
-                                    number: i + 602,
-                                  });
-    lanes.push({
-      status: status,
-      id: i + 602,
-      boxes: [0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0,
-              0, 0, 0, 0]
-    });
+  for (let i = CONFIG.LANE_END; i >= CONFIG.LANE_START; i--) {
+    const lane = new Lane(i);
+    lanes.push(lane);
+    body += initLane(lane);
   }
 
   $("#main-container").html(body);
-  randomizeTrucksAndChutes();
-  generateStaticBoxes();
-}
 
-function clearJams() {
   lanes.forEach(lane => {
-    for (let i = 0; i < lane.boxes.length; i++) {
-      if (lane.boxes[i] == 2) {
-        lane.boxes[i] = 0;
-      }
-    }
+    renderLane(lane);
+    lane.update();
   });
 }
 
-function generateStaticBoxes() {
-  window.setInterval(clearJams, 15000);
-  lanes.forEach(lane => {
-    if (lane.status == "braking") {
-      for(let i = 0; i < 24; i++) {
-        if (Math.random() < .25) {
-          $(`#zone-${lane.id}-${i}`).addClass("full");
-        }
+function initLane(lane) {
+  let zones = "";
+  lane.zones.forEach((zone, index) => {
+    zones += TEMPLATES.zone.render(
+      { 
+        lane: lane.id, 
+        id: index, 
       }
-    } else {
-      startBoxes(lane);
-    }
+    );
   });
-}
-
-function startBoxes(lane) {
-  updateLane(lane);
-}
-
-function updateLane(lane) {
-  lane.boxes = updateBoxes(lane.boxes);
-  if (Math.random() < 0.03) {
-    if (!hasJam(lane)) {
-      const index = Math.floor(Math.random() * 23);
-      lane.boxes[index] = 2;
+  return TEMPLATES.lane.render(
+    {
+      zones: zones,
+      number: lane.id
     }
-  }
-  if (lane.boxes[23] == 0) {
-    if (Math.random() < 0.25) {
-      lane.boxes[23] = 1;
-    }
-  }
-  renderLane(lane);
-
-  window.setTimeout(() => { updateLane(lane); }, 1000);
-}
-
-function updateBoxes(boxes) {
-  let end = [];
-  let curr = [];
-  let jam = false;
-  boxes.forEach(box => {
-    if (box == 2) {
-      curr.shift();
-      curr.push(0);
-      end.push(curr);
-      curr = [];
-      jam = true;
-      end.push([box]);
-    }
-
-    if (jam) {
-      if (box == 1) {
-        curr.push(box);
-      } else if (box == 0) {
-        end.push(curr);
-        curr = []
-        curr.push(box);
-        jam = false;
-      }
-    } else {
-      curr.push(box);
-    }
-  });
-  if (!jam) {
-    curr.shift();
-    curr.push(0);
-  }
-  end.push(curr);
-  return [].concat.apply([], end);
-}
-
-function hasJam(lane) {
-  for (let i = 0; i < lane.boxes.length; i++) {
-    if (lane.boxes[i] == 2) return true;
-  }
-  return false;
+  );
 }
 
 function renderLane(lane) {
-  for(let i = 0; i < 24; i++) {
-    const zone = $(`#zone-${lane.id}-${i}`);
-    zone.removeClass("full");
-    zone.removeClass("jammed");
-    if (lane.boxes[i] == 1) {
-      zone.addClass("full");
-    }
-    if (lane.boxes[i] == 2) {
-      zone.addClass("jammed");
-    }
-  }
+  lane.zones.forEach((zone, index) => {
+    updateZone(lane.id, index, zone); 
+  });
+
+  updateTruck(lane.id, lane.truck);
+  updateChute(lane.id, lane.chute);
 }
-function randomizeTrucksAndChutes() {
-  for (let i = 0; i < 16; i++) {
-    const truck = randomPercentage();
-    $(`#truck-${i + 602}`).css("height", `${truck}%`);
-    $(`#truck-${i + 602}`).html(`${truck}%`)
-    const chute = randomPercentage();
-    $(`#chute-${i + 602}`).css("height", `${chute}%`);
-    $(`#chute-${i + 602}`).html(`${chute}%`)
+
+function updateTruck(lane, truck) {
+  if (truck.needsRender) {
+    $(`#truck-${lane}`).html(`${truck.fillAmount}%`);
+    $(`#truck-${lane}`).css("height", `${truck.fillAmount}%`);
   }
 }
 
-function randomPercentage() {
-  return Math.round(Math.random() * 100);
+function updateChute(lane, chute) {
+  if (chute.needsRender) {
+    $(`#chute-${lane}`).html(`${chute.fillAmount}%`);
+    $(`#chute-${lane}`).css("height", `${chute.fillAmount}%`);
+  }
 }
 
-function generateStartingLane() {
-
+function updateZone(lane, id, zone) {
+  if (zone.needsRender) {
+    const zoneDiv = $(`#zone-${lane}-${id}`)
+    zoneDiv.removeClass("jammed");
+    zoneDiv.removeClass("moving");
+    zoneDiv.removeClass("braking");
+    zoneDiv.removeClass("full");
+    if (zone.left && zone.right) {
+      zoneDiv.addClass("braking");
+    } else {
+      zoneDiv.addClass("moving");
+    }
+                   
+    if (zone.obstructed) {
+      zoneDiv.addClass("full");
+    }
+    zone.needsRender = false;
+  }
 }

@@ -10,18 +10,19 @@ class Lane {
     this.truck = new Truck();
   }
 
-  init() {
-
-  }
-
   update() {
+    console.log(this.updateUrl)
     $.ajax(this.updateUrl, {
       dataType: "jsonp",
       type: "GET",
       success: data => {
         this.parseData(data);
+        renderLane(this);
+      },
+      error: res => {
       }
     })
+    window.setTimeout(this.update.bind(this), 1000);
   }
 
   parseData(data) {
@@ -34,6 +35,8 @@ class Lane {
         obstructed: brakeSet.lightSensor.obstructed
       }
     });
+    this.truck.fill = parseInt(data.payload.lane.truckFull);
+    this.chute.fill = data.payload.chute.chuteLidarMeas;
   }
 
   summarize() {

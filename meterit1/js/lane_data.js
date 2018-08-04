@@ -4,10 +4,11 @@ if (!Date.now) {
 
 class Zone {
   constructor() {
-    this.left = false;
-    this.right = false;
+    this.left = true;
+    this.right = true;
     this.obstructed = false;
-    this.lastModified = 0;
+    this.needsRender = true;
+    this.lastModified = Date.now();
   }
 
   set status(status) {
@@ -20,32 +21,40 @@ class Zone {
   }
 
   hasChange(status) {
-    return this.left != status.left ||
-           this.right != status.right ||
-           this.obstructed != status.obstructed;
+    return this.needsRender = 
+      this.left != status.left ||
+      this.right != status.right ||
+      this.obstructed != status.obstructed;
   }
 }
 
 class Chute {
   constructor() {
     this.fillAmount = 0;
+    this.needsRender = true;
     this.lastModified = 0;
   }
 
-  set fill(percentage) {
-    this.fillAmount = percentage;
-    this.lastModified = Date.now();
+  set fill(raw) {
+    const fillAmount = Math.round(Math.max(0, Math.min(100, 100 * (1 - ((raw - 30) / 270)))));
+    if (this.needsRender = this.fillAmount != fillAmount) {
+      this.fillAmount = fillAmount;
+      this.lastModified = Date.now();
+    }
   }
 }
 
 class Truck {
   constructor() {
     this.fillAmount = 0;
+    this.needsRender = true;
     this.lastModified = 0;
   }
 
   set fill(percentage) {
-    this.fillAmount = percentage;
-    this.lastModified = Date.now();
+    if (this.needsRender = this.fillAmount != percentage) {
+      this.fillAmount = percentage;
+      this.lastModified = Date.now();
+    }
   }
 }
