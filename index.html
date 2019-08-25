@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Mountain Project Viewer - Lynn Woods</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+        <link rel="stylesheet" href="css/multirange.css">
+        <link rel="stylesheet" href="css/leaflet.extra-markers.min.css">
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.5.1/dist/leaflet.css" integrity="sha512-xwE/Az9zrjBIphAcBb3F6JVqxf46+CDLwfLMHloNu6KEQCAWi6HcDUbeOfBIptF7tcCzusKFjFw2yuvEpDL9wQ==" crossorigin=""/>
+        <link rel="stylesheet" href="css/style.css">
+        <script src="https://unpkg.com/leaflet@1.5.1/dist/leaflet.js" integrity="sha512-GffPMF3RvMeYyc1LWMHtK8EbPv0iNZ8/oTtHPx9/cc2ILxQ+u905qIwdpULaqDkyBKgOaB57QTMg7ztg8Jm2Og==" crossorigin=""></script>
+        <script src="js/pouchdb-7.1.1.min.js"></script>
+        <script src="js/pouchdb.find.js"></script>
+        <script src="js/leaflet.extra-markers.min.js"></script>
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.locatecontrol/dist/L.Control.Locate.min.css" />
+        <script src="https://cdn.jsdelivr.net/npm/leaflet.locatecontrol/dist/L.Control.Locate.min.js" charset="utf-8"></script>
+        <script src="js/multirange.js"></script>
+        <script src="js/data.js"></script>
+        <script src="js/map.js"></script>
+    </head>
+    <body>
+         <div id="map"></div>
+         <div class="flex-container search-container">
+             <div class="search">
+                 <input id="search" placeholder="search by name"></input>
+             </div>
+         </div>
+         <div class="flex-container slider-container">
+             <div id="low"></div>
+             <div class="spacer">
+                 <div class="slider">
+                     <input id="grade" type="range" multiple value="0,100"></input>
+                 </div>
+             </div>
+             <div id="high"></div>
+         </div>
+         <div id="loading">
+             <div>
+             Loading boulders...<br>
+             <div id="load"></div>
+             </div>
+         </div>
+
+        <div id="boulders">
+            <div id="close-boulders">
+                x
+            </div>
+            <div id="boulder-body">
+            </div>
+        </div>
+    </body>
+</html>

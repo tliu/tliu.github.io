@@ -1,0 +1,174 @@
+body {
+    padding: 0;
+    margin: 0;
+    font-family: "Helvetica Neue", Helvetica;
+}
+html, body, #map {
+    width: 100vw;
+    height: 100%;
+}
+
+#loading {
+    width: 100vw;
+    height: 100%;
+    z-index: 1071;
+    display: flex;
+    font-size: 300%;
+    align-items: center;
+    justify-content: center;
+    background-color: #aaa;
+    opacity: .7;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.flex-container {
+    position: absolute;
+    margin: 0 -6px;
+    height: 28px;
+    display: flex;
+    z-index: 1000;
+    justify-content: space-between;
+}
+
+.search-container {
+    top: 12px;
+    left: 55px;
+    right: 12px;
+}
+
+.slider-container {
+    top: 44px;
+    left: 55px;
+    right: 12px;
+}
+
+.search {
+    display: flex;
+    flex-basis: 100%;
+}
+
+#low, #high {
+    flex-basis: 15%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: white;
+    font-weight: bold;
+    color: #808080;
+    border-radius: 4px;
+}
+
+.results {
+    flex-basis: 20%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: white;
+    font-size: 1.5rem;
+    margin: 0 5px;
+}
+
+input#search {
+    padding-left: 6px;
+    width: 100%;
+    border: none;
+    border-radius: 4px;
+}
+
+.marker {
+    color: #fff;
+}
+
+.spacer {
+    display: flex;
+    background-color: #fff;
+    align-items: center;
+    justify-content: center;
+    margin: 0 5px; 
+    padding: 6px;
+    width: 100%;
+    border-radius: 4px;
+}
+
+.slider {
+    display: flex;
+    position: relative;
+    z-index: 1000;
+    width: 100%;
+}
+
+#grade {
+    width: 100%
+}
+
+.leaflet-touch .leaflet-bar a:first-child {
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+}
+
+.leaflet-touch .leaflet-bar a:last-child {
+    border-bottom-left-radius: 4px;
+    border-bottom-right-radius: 4px;
+}
+
+.leaflet-control-zoom-in {
+    color: #808080!important;
+}
+
+.leaflet-control-zoom-out {
+    color: #808080!important;
+}
+
+#boulders {
+    display: none;
+    position: absolute;
+    bottom: 0;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    background: white;
+    z-index: 1000;
+    height: 40%;
+    left: 6px;
+    right: 6px;
+    overflow-y: scroll;
+}
+
+.boulder {
+    border-bottom: 1px #ccc solid;
+    line-height: 0px;
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-top: 4px;
+}
+
+.boulder h3 {
+  font-size: 1.75rem;
+  font-weight: normal;
+}
+
+.boulder h4 {
+  font-size: 1rem;
+  font-weight: normal;
+}
+
+#close-boulders {
+  position: absolute;
+  right: 6px;
+  top: 6px;
+  border-radius: 4px;
+  border: 1px #ccc solid;
+  padding: 3px;
+  padding-right: 6px;
+  padding-left: 6px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.noclass {
+  text-decoration: none;
+  color: #000;
+}
