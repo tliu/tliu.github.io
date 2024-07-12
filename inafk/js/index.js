@@ -163,12 +163,12 @@ const addSeqToDp = (dp, seq, total) => {
 
 const generateFrameMeter = (seq, adv) => {
     let firstLine = ""
-    let secondLine = "<b>"
+    let secondLine = ""
     let totalFrames = 0
     seq.forEach(move => {
         if (move.input === "66") firstLine += "Dash"
         else firstLine += move.input
-        firstLine += "&nbsp;".repeat(move.total - move.input.length)
+        firstLine += "\u00A0".repeat(move.total - move.input.length)
         if (move.driverush) {
             secondLine += '<span class="purple">' + '|'.repeat(3) + '</span>'
             secondLine += '<span class="green">' + '|'.repeat(8) + '</span>'
@@ -179,5 +179,5 @@ const generateFrameMeter = (seq, adv) => {
         totalFrames += move.startup + move.active + move.recovery - 1
     })
     secondLine += "&nbsp;".repeat(adv) + "+" + adv 
-    return firstLine + "<br>" + secondLine + "</b>"
+    return firstLine + "<br>" + secondLine 
 }
