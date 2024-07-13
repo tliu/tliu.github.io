@@ -120,7 +120,7 @@ const calculateFrameKill = (kd, target, character) => {
     while (!shouldStop(frameCounts, toKill, character.fastest)) {
         frameCounts = iterate(dp, character, ++depth)
     }
-    const keys = Array.from(dp.keys().filter(k => k >= kd - target[1] && k <= kd - target[0]))
+    const keys = Array.from(Array.from(dp.keys()).filter(k => k >= kd - target[1] && k <= kd - target[0]))
     return Array.from(dp).filter(([k, _]) => keys.includes(k)).map(([k, v]) => [kd - k, v])
 }
 
