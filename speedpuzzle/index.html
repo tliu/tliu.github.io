@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f1419" />
+  <meta name="description" content="Speed puzzle timer with splits and pieces-per-minute metronome" />
+  <title>Speed Puzzle Timer</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect fill='%233d9eff' width='32' height='32' rx='8'/%3E%3C/svg%3E" />
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <h1>Speed Puzzle</h1>
+      <p class="tagline">Stopwatch · splits · PPM pace</p>
+    </header>
+
+    <section class="panel timer-panel" aria-label="Timer">
+      <div class="time-display" id="timeDisplay">00:00.000</div>
+      <div class="stat-block" id="finalPpmBlock" aria-live="polite">
+        <span class="stat-label">Final PPM</span>
+        <span class="stat-value" id="finalPpmValue">—</span>
+      </div>
+      <div class="field-row piece-field">
+        <label for="pieceCountFinal">Pieces (for Final PPM)</label>
+        <input type="number" id="pieceCountFinal" min="1" max="99999" value="500" inputmode="numeric" />
+      </div>
+      <div class="timer-controls">
+        <button type="button" class="btn primary" id="btnStart">Start</button>
+        <button type="button" class="btn" id="btnStop" disabled>Stop</button>
+        <button type="button" class="btn ghost" id="btnReset">Reset</button>
+      </div>
+      <label class="toggle wake-row">
+        <input type="checkbox" id="wakeLockToggle" checked />
+        <span>Keep screen on while running</span>
+      </label>
+    </section>
+
+    <section class="panel splits-panel" aria-label="Splits">
+      <h2>Splits</h2>
+      <p class="hint">Add names in order. While the timer runs, tap anywhere on the dark tap zone below to record the next split.</p>
+      <div class="split-editor" id="splitEditor"></div>
+      <button type="button" class="btn small" id="btnAddSplit">+ Add split</button>
+      <div class="tap-zone" id="tapZone" tabindex="0" role="button" aria-label="Tap to record next split">
+        <span class="tap-zone-label" id="tapZoneLabel">Tap here (or anywhere below) to split</span>
+      </div>
+      <ul class="split-list" id="splitList" aria-live="polite"></ul>
+    </section>
+
+    <section class="panel ppm-panel" aria-label="Pieces per minute">
+      <h2>PPM pace</h2>
+      <p class="hint">Pick which numbered split (from your list above) ends the setup phase; right after you tap that split, the metronome starts at your target PPM.</p>
+      <div class="field-row">
+        <label for="ppmAfterSplit">Start metronome after split</label>
+        <select id="ppmAfterSplit"></select>
+      </div>
+      <div class="field-row">
+        <label for="ppmTarget">Target pieces / minute</label>
+        <input type="number" id="ppmTarget" min="1" max="600" value="40" inputmode="numeric" />
+      </div>
+      <div class="field-row piece-field">
+        <label for="pieceCountPace">Pieces (for pace estimate)</label>
+        <input type="number" id="pieceCountPace" min="1" max="99999" value="500" inputmode="numeric" />
+      </div>
+      <div class="stat-block pace-estimate" aria-live="polite">
+        <span class="stat-label">Est. solve time at target pace</span>
+        <span class="stat-value mono" id="expectedDuration">—</span>
+      </div>
+      <div class="field-row sound-field">
+        <label for="ppmSound">Tick sound</label>
+        <div class="sound-row-controls">
+          <select id="ppmSound">
+            <option value="beep">Short beep</option>
+            <option value="click">Click</option>
+            <option value="tick">Soft tick</option>
+          </select>
+          <button type="button" class="btn small" id="btnPreviewTick" aria-label="Preview tick sound">
+            Preview
+          </button>
+        </div>
+      </div>
+      <div class="ppm-status" id="ppmStatus"></div>
+      <div class="ppm-controls">
+        <button type="button" class="btn" id="btnPpmStop" disabled>Stop metronome</button>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <p>Install: use your browser’s “Add to Home Screen” for a full-screen app. Audio may require one tap after loading.</p>
+    </footer>
+  </div>
+  <script src="app.js" type="module"></script>
+</body>
+</html>

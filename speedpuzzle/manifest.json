@@ -1,0 +1,10 @@
+{
+  "name": "Speed Puzzle Timer",
+  "short_name": "Speed Puzzle",
+  "description": "Stopwatch with splits and pieces-per-minute metronome for speed puzzling",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0f1419",
+  "theme_color": "#0f1419",
+  "orientation": "portrait-primary"
+}
