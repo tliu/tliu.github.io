@@ -28,12 +28,15 @@
     html {
       -webkit-text-size-adjust: 100%;
       height: 100%;
+      overflow: hidden;
     }
 
     body {
       margin: 0;
-      min-height: 100%;
-      min-height: 100dvh;
+      height: 100%;
+      height: 100dvh;
+      max-height: 100dvh;
+      overflow: hidden;
       display: flex;
       flex-direction: column;
       font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
@@ -138,6 +141,7 @@
       gap: 12px;
       flex: 1;
       min-height: 0;
+      overflow: hidden;
     }
 
     @media (max-width: 699px) {
@@ -164,6 +168,8 @@
       .game-area .side-col {
         width: 220px;
         flex-shrink: 0;
+        min-height: 0;
+        overflow-y: auto;
       }
     }
 
@@ -172,13 +178,14 @@
       min-height: 0;
       display: flex;
       flex-direction: column;
+      overflow: hidden;
     }
 
     .canvas-wrap {
       position: relative;
       width: 100%;
       flex: 1;
-      min-height: min(72vh, 720px);
+      min-height: 0;
       touch-action: none; /* we handle pan/zoom ourselves — none allows precise taps */
       overflow: hidden;
       background: var(--bg);
@@ -228,13 +235,6 @@
       background: var(--bg);
       color: var(--text);
       max-width: 100%;
-    }
-
-    .hint {
-      font-size: 0.8rem;
-      color: var(--muted);
-      text-align: center;
-      line-height: 1.4;
     }
 
     .stats {
@@ -291,20 +291,59 @@
       overflow: hidden;
       pointer-events: none;
     }
+
+    .mode-toggle-wrap {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 14px;
+      margin-bottom: 12px;
+      font-size: 0.9rem;
+    }
+
+    .mode-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      color: var(--text);
+      user-select: none;
+    }
+
+    .mode-toggle input {
+      width: 1.1rem;
+      height: 1.1rem;
+      accent-color: var(--accent);
+    }
+
+    .mode-toggle-hint {
+      font-size: 0.8rem;
+      color: var(--muted);
+      line-height: 1.35;
+      flex: 1 1 220px;
+    }
   </style>
 </head>
 <body>
   <h1>Where does this piece go?</h1>
 
+  <div class="mode-toggle-wrap">
+    <label class="mode-toggle">
+      <input type="checkbox" id="oneClickModeToggle">
+      One click mode
+    </label>
+    <span class="mode-toggle-hint">Off: guess until you tap inside the piece. On: each tap counts as a round.</span>
+  </div>
+
   <div class="panel controls">
     <input type="file" id="fileInput" class="hidden-file" accept="image/*">
     <button type="button" class="btn secondary" id="pickImageBtn">Choose image</button>
-    <label>Puzzle pieces <input type="number" id="pieceCountInput" min="4" max="400" value="24" title="How the photo is cut; grid matches image shape"></label>
+    <label>Puzzle pieces <input type="number" id="pieceCountInput" min="4" max="512" value="500" title="How the photo is cut; grid matches image shape"></label>
     <label>Rounds <input type="number" id="roundsInput" min="1" max="1000" value="12" title="How many placement turns; pieces may repeat if rounds exceed puzzle size"></label>
     <label title="Piece preview and stats column">Panel
       <select id="sidebarSideSelect" aria-label="Panel side">
+        <option value="left" selected>Left</option>
         <option value="right">Right</option>
-        <option value="left">Left</option>
       </select>
     </label>
     <label title="Same image, puzzle pieces, rounds, and seed reproduce piece shapes and round order">Seed
@@ -314,12 +353,11 @@
     <button type="button" class="btn" id="startBtn" disabled>Start game</button>
   </div>
 
-  <div class="game-area" id="gameArea">
+  <div class="game-area sidebar-left" id="gameArea">
     <div class="main-col">
       <div class="canvas-wrap" id="canvasWrap">
         <canvas id="mainCanvas" width="800" height="600"></canvas>
       </div>
-      <p class="hint">Puzzle pieces = how the photo is cut. Rounds = how many placement turns (pieces can repeat if rounds are larger). Tap where the piece belongs. Same image file, pieces, rounds, and seed → same puzzle cuts and round order (send those to match someone else’s game).</p>
     </div>
     <div class="side-col">
       <div class="panel piece-preview-wrap">
@@ -332,11 +370,14 @@
         <div>Status: <strong id="statusText">Load an image to begin</strong></div>
         <div>Grid: <strong id="gridInfo">—</strong></div>
         <div>Round: <strong id="roundText">—</strong> / <span id="totalRounds">—</span></div>
-        <div>Last time: <strong id="lastTime">—</strong></div>
-        <div>Last edge: <strong id="lastEdge">—</strong></div>
-        <div>Avg time: <strong id="avgTime">—</strong></div>
-        <div>Avg edge distance: <strong id="avgEdge">—</strong> <span style="font-size:0.75rem;color:var(--muted)">(hits = 0)</span></div>
-        <div class="round-msg" id="roundMsg"></div>
+        <div>Total time: <strong id="totalTimeLive">—</strong></div>
+        <div id="statsDetailOneClick">
+          <div>Last time: <strong id="lastTime">—</strong></div>
+          <div>Last edge: <strong id="lastEdge">—</strong></div>
+          <div>Avg time: <strong id="avgTime">—</strong></div>
+          <div>Avg edge distance: <strong id="avgEdge">—</strong> <span style="font-size:0.75rem;color:var(--muted)">(hits = 0)</span></div>
+          <div class="round-msg" id="roundMsg"></div>
+        </div>
       </div>
       <div class="panel game-summary" id="gameSummary" style="display: none">
         <div style="font-weight: 600; margin-bottom: 6px">Session results</div>
@@ -374,6 +415,9 @@
   const sidebarSideSelect = document.getElementById('sidebarSideSelect');
   const seedInput = document.getElementById('seedInput');
   const randomSeedBtn = document.getElementById('randomSeedBtn');
+  const oneClickModeToggle = document.getElementById('oneClickModeToggle');
+  const totalTimeLive = document.getElementById('totalTimeLive');
+  const statsDetailOneClick = document.getElementById('statsDetailOneClick');
 
   const MAX_BITMAP_EDGE = 2048;
   const SIDEBAR_SIDE_KEY = 'ppp-sidebar-side';
@@ -393,6 +437,9 @@
   let sumEdgeDist = 0;
   let completed = 0;
   let sessionHits = 0;
+
+  let gameSessionStartMs = null;
+  let totalTimeTickerId = null;
 
   /** DPR used for main canvas backing store (matches ctx transform). */
   let canvasDpr = 1;
@@ -460,6 +507,14 @@
     seedInput.value = randomSeedString();
   });
 
+  function syncStatsDetailVisibility() {
+    if (!statsDetailOneClick) return;
+    statsDetailOneClick.style.display = oneClickModeToggle.checked ? '' : 'none';
+  }
+
+  oneClickModeToggle.addEventListener('change', syncStatsDetailVisibility);
+  syncStatsDetailVisibility();
+
   pickImageBtn.addEventListener('click', () => fileInput.click());
 
   fileInput.addEventListener('change', async (e) => {
@@ -516,11 +571,18 @@
     const wrap = document.getElementById('canvasWrap');
     let maxW = wrap.clientWidth;
     let maxH = wrap.clientHeight;
+
+    const vv = window.visualViewport;
+    const viewH = vv ? vv.height : window.innerHeight;
+    const wr = wrap.getBoundingClientRect();
+    const padBottom = 16;
+    /** Never taller than visible viewport below the puzzle frame (avoids page scroll on 1080p etc.). */
+    const viewportCap = Math.max(80, viewH - wr.top - padBottom);
+    maxH = Math.min(maxH, viewportCap);
+
     if (maxW < 48) maxW = Math.max(48, window.innerWidth - 48);
-    if (maxH < 120) {
-      const top = wrap.getBoundingClientRect().top;
-      maxH = Math.max(260, window.innerHeight - top - 24);
-    }
+    if (maxH < 80) maxH = viewportCap;
+
     const ar = displayW / displayH;
     let cssW = maxW;
     let cssH = cssW / ar;
@@ -648,7 +710,7 @@
    * Prefer an exact R×C = N when possible; otherwise closest product to N.
    */
   function dimensionsFromPieceCount(targetPieces, imgW, imgH) {
-    const requested = Math.max(4, Math.min(512, Math.round(Number(targetPieces)) || 24));
+    const requested = Math.max(4, Math.min(512, Math.round(Number(targetPieces)) || 500));
     const aspect = imgW / imgH;
     const exact = [];
     const maxDim = 48;
@@ -1062,6 +1124,8 @@
     completed = 0;
     sessionHits = 0;
     gameActive = true;
+    gameSessionStartMs = performance.now();
+    startTotalTimeTicker();
     totalRounds.textContent = queue.length;
     statusText.textContent = 'Game on — tap the image';
     hideSessionSummary();
@@ -1070,9 +1134,12 @@
 
   function resetStatsDisplay() {
     hideSessionSummary();
+    stopTotalTimeTicker();
+    gameSessionStartMs = null;
     gridInfo.textContent = '—';
     roundText.textContent = '—';
     totalRounds.textContent = '—';
+    totalTimeLive.textContent = '—';
     lastTime.textContent = '—';
     lastEdge.textContent = '—';
     avgTime.textContent = '—';
@@ -1080,9 +1147,28 @@
     roundMsg.textContent = '';
   }
 
+  function updateTotalTimeLive() {
+    if (gameSessionStartMs == null) return;
+    totalTimeLive.textContent = fmtSeconds(performance.now() - gameSessionStartMs);
+  }
+
+  function startTotalTimeTicker() {
+    stopTotalTimeTicker();
+    updateTotalTimeLive();
+    totalTimeTickerId = window.setInterval(updateTotalTimeLive, 100);
+  }
+
+  function stopTotalTimeTicker() {
+    if (totalTimeTickerId != null) {
+      window.clearInterval(totalTimeTickerId);
+      totalTimeTickerId = null;
+    }
+  }
+
   function startRound() {
     if (currentIndex >= queue.length) {
       gameActive = false;
+      stopTotalTimeTicker();
       statusText.textContent = 'Done! Change settings or load a new image.';
       roundText.textContent = String(queue.length);
       return;
@@ -1201,6 +1287,30 @@
   }
 
   function renderSessionSummary(s) {
+    const multiSimple = s.piecesPerMin != null && Number.isFinite(s.piecesPerMin);
+
+    if (multiSimple) {
+      compositeScoreLine.textContent = '';
+      compositeScoreLine.style.display = 'none';
+      const wallSec =
+        s.sessionWallSec != null && Number.isFinite(s.sessionWallSec)
+          ? s.sessionWallSec
+          : s.totalSec;
+      scoreBreakdown.innerHTML = [
+        '<table class="breakdown-table">',
+        '<tr><td>Total time</td><td><strong>',
+        wallSec.toFixed(2),
+        ' s</strong></td></tr>',
+        '<tr><td>Pieces / minute</td><td><strong>',
+        s.piecesPerMin.toFixed(2),
+        '</strong></td></tr>',
+        '</table>',
+      ].join('');
+      gameSummary.style.display = 'block';
+      return;
+    }
+
+    compositeScoreLine.style.display = '';
     compositeScoreLine.textContent = `Composite: ${s.composite.toFixed(1)} / 100`;
     const contribHit = s.hitScore * SCORE_W_HIT;
     const contribTime = s.timeScore * SCORE_W_TIME;
@@ -1262,6 +1372,7 @@
   function hideSessionSummary() {
     gameSummary.style.display = 'none';
     compositeScoreLine.textContent = '';
+    compositeScoreLine.style.display = '';
     scoreBreakdown.innerHTML = '';
   }
 
@@ -1292,6 +1403,29 @@
     }, 650);
   }
 
+  function advanceAfterRound() {
+    currentIndex++;
+    window.setTimeout(() => {
+      if (currentIndex < queue.length) {
+        startRound();
+      } else {
+        gameActive = false;
+        stopTotalTimeTicker();
+        updateTotalTimeLive();
+        statusText.textContent = 'Finished all rounds! See session results below.';
+        roundText.textContent = String(queue.length);
+        pctx.clearRect(0, 0, pieceCanvas.width, pieceCanvas.height);
+        const summary = buildSessionSummary(queue.length, sessionHits, sumTime, sumEdgeDist);
+        if (!oneClickModeToggle.checked && gameSessionStartMs != null) {
+          const wallMs = Math.max(1, performance.now() - gameSessionStartMs);
+          summary.sessionWallSec = wallMs / 1000;
+          summary.piecesPerMin = (queue.length / wallMs) * 60000;
+        }
+        renderSessionSummary(summary);
+      }
+    }, 700);
+  }
+
   function handlePlacement(ev) {
     if (!gameActive || currentIndex < 0 || currentIndex >= queue.length) return;
     ev.preventDefault();
@@ -1304,8 +1438,31 @@
     const { ix, iy } = cssToImageCoords(x, y);
     const elapsed = performance.now() - roundStart;
     const { inside, edgeDist } = scoreRound(ix, iy, piece);
-    if (inside) sessionHits++;
 
+    const oneClick = oneClickModeToggle.checked;
+
+    if (!oneClick) {
+      lastTime.textContent = fmtSeconds(elapsed);
+      lastEdge.textContent = inside ? 'Hit (inside)' : `${edgeDist.toFixed(1)} px from edge`;
+      if (!inside) {
+        roundMsg.textContent = `Miss — ${edgeDist.toFixed(1)} px from the nearest edge.`;
+        roundMsg.className = 'round-msg bad';
+        return;
+      }
+      sessionHits++;
+      sumTime += elapsed;
+      sumEdgeDist += edgeDist;
+      completed++;
+      avgTime.textContent = fmtSeconds(sumTime / completed);
+      avgEdge.textContent = (sumEdgeDist / completed).toFixed(1) + ' px';
+      roundMsg.textContent = 'Hit — tap was inside the piece outline.';
+      roundMsg.className = 'round-msg good';
+      flashCorrectRect(piece);
+      advanceAfterRound();
+      return;
+    }
+
+    if (inside) sessionHits++;
     lastTime.textContent = fmtSeconds(elapsed);
     lastEdge.textContent = inside ? 'Hit (inside)' : `${edgeDist.toFixed(1)} px from edge`;
 
@@ -1321,19 +1478,7 @@
     roundMsg.className = 'round-msg ' + (inside ? 'good' : 'bad');
 
     flashCorrectRect(piece);
-
-    currentIndex++;
-    setTimeout(() => {
-      if (currentIndex < queue.length) startRound();
-      else {
-        gameActive = false;
-        statusText.textContent = 'Finished all rounds! See session results below.';
-        roundText.textContent = String(queue.length);
-        pctx.clearRect(0, 0, pieceCanvas.width, pieceCanvas.height);
-        const summary = buildSessionSummary(queue.length, sessionHits, sumTime, sumEdgeDist);
-        renderSessionSummary(summary);
-      }
-    }, 700);
+    advanceAfterRound();
   }
 
   mainCanvas.addEventListener('pointerdown', (ev) => {
