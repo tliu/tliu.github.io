@@ -1,0 +1,1352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Piece placement puzzle</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    :root {
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --text: #e8eef4;
+      --muted: #8b9aab;
+      --accent: #3d9cf0;
+      --accent-dim: #2563a8;
+      --success: #34d399;
+      --danger: #f87171;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --safe-left: env(safe-area-inset-left, 0px);
+      --safe-right: env(safe-area-inset-right, 0px);
+    }
+
+    html {
+      -webkit-text-size-adjust: 100%;
+      height: 100%;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100%;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding:
+        calc(12px + var(--safe-top))
+        calc(12px + var(--safe-right))
+        calc(12px + var(--safe-bottom))
+        calc(12px + var(--safe-left));
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    h1 {
+      font-size: clamp(1.1rem, 4vw, 1.35rem);
+      font-weight: 600;
+      margin: 0 0 12px;
+      line-height: 1.3;
+    }
+
+    .panel {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    label {
+      font-size: 0.875rem;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    input[type="number"],
+    input[type="file"] {
+      font-size: 16px; /* prevents iOS zoom on focus */
+      max-width: 100%;
+    }
+
+    input[type="number"] {
+      width: 4.5rem;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid #2d3d52;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    input[type="text"].seed-input {
+      width: min(22rem, 100%);
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid #2d3d52;
+      background: var(--bg);
+      color: var(--text);
+      font-family: ui-monospace, monospace;
+      font-size: 14px;
+    }
+
+    .btn {
+      appearance: none;
+      font-size: 16px;
+      font-weight: 600;
+      padding: 12px 18px;
+      min-height: 44px;
+      min-width: 44px;
+      border-radius: 10px;
+      border: none;
+      cursor: pointer;
+      background: var(--accent);
+      color: #fff;
+      touch-action: manipulation;
+    }
+
+    .btn:active {
+      transform: scale(0.98);
+    }
+
+    .btn.secondary {
+      background: #2d3d52;
+      color: var(--text);
+    }
+
+    .btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .game-area {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      flex: 1;
+      min-height: 0;
+    }
+
+    @media (max-width: 699px) {
+      .game-area.sidebar-left .side-col {
+        order: -1;
+      }
+    }
+
+    @media (min-width: 700px) {
+      .game-area {
+        flex-direction: row;
+        align-items: stretch;
+      }
+      .game-area.sidebar-left {
+        flex-direction: row-reverse;
+      }
+      .game-area .main-col {
+        flex: 1;
+        min-width: 0;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .game-area .side-col {
+        width: 220px;
+        flex-shrink: 0;
+      }
+    }
+
+    .main-col {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .canvas-wrap {
+      position: relative;
+      width: 100%;
+      flex: 1;
+      min-height: min(72vh, 720px);
+      touch-action: none; /* we handle pan/zoom ourselves — none allows precise taps */
+      overflow: hidden;
+      background: var(--bg);
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      vertical-align: middle;
+    }
+
+    #mainCanvas {
+      cursor: crosshair;
+    }
+
+    .piece-preview-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+    }
+
+    .piece-preview-inner {
+      width: 100%;
+      min-height: 220px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #pieceCanvas {
+      max-width: 100%;
+      height: auto;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+      touch-action: manipulation;
+    }
+
+    select {
+      font-size: 16px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid #2d3d52;
+      background: var(--bg);
+      color: var(--text);
+      max-width: 100%;
+    }
+
+    .hint {
+      font-size: 0.8rem;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.4;
+    }
+
+    .stats {
+      font-size: 0.9rem;
+      line-height: 1.65;
+    }
+
+    .stats strong { color: var(--accent); }
+
+    .round-msg {
+      font-size: 0.95rem;
+      margin-top: 8px;
+      min-height: 1.4em;
+    }
+
+    .good { color: var(--success); }
+    .bad { color: var(--danger); }
+
+    .game-summary .composite-line {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 10px;
+    }
+
+    .game-summary .breakdown-table {
+      width: 100%;
+      font-size: 0.82rem;
+      line-height: 1.5;
+    }
+
+    .game-summary .breakdown-table td:first-child {
+      color: var(--muted);
+      padding-right: 10px;
+      vertical-align: top;
+      white-space: nowrap;
+    }
+
+    .game-summary .breakdown-table td:last-child {
+      width: 100%;
+    }
+
+    .game-summary hr {
+      border: none;
+      border-top: 1px solid #2d3d52;
+      margin: 10px 0;
+    }
+
+    .hidden-file {
+      position: absolute;
+      width: 0.1px;
+      height: 0.1px;
+      opacity: 0;
+      overflow: hidden;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>Where does this piece go?</h1>
+
+  <div class="panel controls">
+    <input type="file" id="fileInput" class="hidden-file" accept="image/*">
+    <button type="button" class="btn secondary" id="pickImageBtn">Choose image</button>
+    <label>Puzzle pieces <input type="number" id="pieceCountInput" min="4" max="400" value="24" title="How the photo is cut; grid matches image shape"></label>
+    <label>Rounds <input type="number" id="roundsInput" min="1" max="1000" value="12" title="How many placement turns; pieces may repeat if rounds exceed puzzle size"></label>
+    <label title="Piece preview and stats column">Panel
+      <select id="sidebarSideSelect" aria-label="Panel side">
+        <option value="right">Right</option>
+        <option value="left">Left</option>
+      </select>
+    </label>
+    <label title="Same image, puzzle pieces, rounds, and seed reproduce piece shapes and round order">Seed
+      <input type="text" class="seed-input" id="seedInput" placeholder="e.g. picnic-42" autocomplete="off" spellcheck="false">
+    </label>
+    <button type="button" class="btn secondary" id="randomSeedBtn" title="Fill with a random seed">Random seed</button>
+    <button type="button" class="btn" id="startBtn" disabled>Start game</button>
+  </div>
+
+  <div class="game-area" id="gameArea">
+    <div class="main-col">
+      <div class="canvas-wrap" id="canvasWrap">
+        <canvas id="mainCanvas" width="800" height="600"></canvas>
+      </div>
+      <p class="hint">Puzzle pieces = how the photo is cut. Rounds = how many placement turns (pieces can repeat if rounds are larger). Tap where the piece belongs. Same image file, pieces, rounds, and seed → same puzzle cuts and round order (send those to match someone else’s game).</p>
+    </div>
+    <div class="side-col">
+      <div class="panel piece-preview-wrap">
+        <span style="font-size:0.85rem;color:var(--muted)">Your piece</span>
+        <div class="piece-preview-inner">
+          <canvas id="pieceCanvas" width="160" height="160"></canvas>
+        </div>
+      </div>
+      <div class="panel stats" id="statsPanel">
+        <div>Status: <strong id="statusText">Load an image to begin</strong></div>
+        <div>Grid: <strong id="gridInfo">—</strong></div>
+        <div>Round: <strong id="roundText">—</strong> / <span id="totalRounds">—</span></div>
+        <div>Last time: <strong id="lastTime">—</strong></div>
+        <div>Last edge: <strong id="lastEdge">—</strong></div>
+        <div>Avg time: <strong id="avgTime">—</strong></div>
+        <div>Avg edge distance: <strong id="avgEdge">—</strong> <span style="font-size:0.75rem;color:var(--muted)">(hits = 0)</span></div>
+        <div class="round-msg" id="roundMsg"></div>
+      </div>
+      <div class="panel game-summary" id="gameSummary" style="display: none">
+        <div style="font-weight: 600; margin-bottom: 6px">Session results</div>
+        <div class="composite-line" id="compositeScoreLine"></div>
+        <div id="scoreBreakdown"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+(function () {
+  const fileInput = document.getElementById('fileInput');
+  const pickImageBtn = document.getElementById('pickImageBtn');
+  const pieceCountInput = document.getElementById('pieceCountInput');
+  const roundsInput = document.getElementById('roundsInput');
+  const startBtn = document.getElementById('startBtn');
+  const mainCanvas = document.getElementById('mainCanvas');
+  const pieceCanvas = document.getElementById('pieceCanvas');
+  const ctx = mainCanvas.getContext('2d');
+  const pctx = pieceCanvas.getContext('2d');
+
+  const statusText = document.getElementById('statusText');
+  const roundText = document.getElementById('roundText');
+  const totalRounds = document.getElementById('totalRounds');
+  const lastTime = document.getElementById('lastTime');
+  const lastEdge = document.getElementById('lastEdge');
+  const avgTime = document.getElementById('avgTime');
+  const avgEdge = document.getElementById('avgEdge');
+  const roundMsg = document.getElementById('roundMsg');
+  const gridInfo = document.getElementById('gridInfo');
+  const gameSummary = document.getElementById('gameSummary');
+  const compositeScoreLine = document.getElementById('compositeScoreLine');
+  const scoreBreakdown = document.getElementById('scoreBreakdown');
+  const gameArea = document.getElementById('gameArea');
+  const sidebarSideSelect = document.getElementById('sidebarSideSelect');
+  const seedInput = document.getElementById('seedInput');
+  const randomSeedBtn = document.getElementById('randomSeedBtn');
+
+  const MAX_BITMAP_EDGE = 2048;
+  const SIDEBAR_SIDE_KEY = 'ppp-sidebar-side';
+
+  let bitmap = null;
+  let displayW = 0;
+  let displayH = 0;
+  let cols = 4;
+  let rows = 4;
+  let pieces = [];
+  let queue = [];
+  let currentIndex = -1;
+  let roundStart = 0;
+  let gameActive = false;
+
+  let sumTime = 0;
+  let sumEdgeDist = 0;
+  let completed = 0;
+  let sessionHits = 0;
+
+  /** DPR used for main canvas backing store (matches ctx transform). */
+  let canvasDpr = 1;
+
+  /** Bitmap → CSS pixel mapping for the reference image (letterbox/center within canvas). */
+  let viewOx = 0;
+  let viewOy = 0;
+  let viewDw = 0;
+  let viewDh = 0;
+  /** Canvas letterbox fill (theme background, not sampled from the photo). */
+  let gutterColor = '#0f1419';
+
+  /**
+   * Horizontal seam horiz[r][c] between row r and r+1: encoded integer ≠ 0.
+   * sign > 0 → upper row carries tab downward; sign < 0 → lower row carries tab upward.
+   * magnitude encodes shape family 0–4: style = |code| − 1 (five mating-compatible silhouettes).
+   */
+  let horiz = [];
+  /** Vertical seam vert[r][c] between col c and c+1: sign > 0 → left cell tabs right; style = |code| − 1. */
+  let vert = [];
+
+  let gameRand = Math.random;
+
+  function seedKeyToUint32(str) {
+    let h = 2166136261 >>> 0;
+    for (let i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    if ((h >>> 0) === 0) return 0x9e3779b9;
+    return h >>> 0;
+  }
+
+  function mulberry32(seedU32) {
+    let a = seedU32 >>> 0;
+    return function rand() {
+      a = (a + 0x6d2b79f5) >>> 0;
+      let t = Math.imul(a ^ (a >>> 15), a | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function randomSeedString() {
+    try {
+      const u = new Uint8Array(10);
+      crypto.getRandomValues(u);
+      return Array.from(u, (b) => b.toString(16).padStart(2, '0')).join('');
+    } catch {
+      return Date.now().toString(36) + Math.random().toString(36).slice(2, 14);
+    }
+  }
+
+  randomSeedBtn.addEventListener('click', () => {
+    seedInput.value = randomSeedString();
+  });
+
+  pickImageBtn.addEventListener('click', () => fileInput.click());
+
+  fileInput.addEventListener('change', async (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    try {
+      const bmp = await createImageBitmap(f);
+      bitmap = scaleBitmapIfNeeded(bmp);
+      if (bmp !== bitmap) bmp.close();
+      displayW = bitmap.width;
+      displayH = bitmap.height;
+      setPuzzleSurroundToTheme();
+      fitCanvasToBitmap();
+      requestAnimationFrame(() => fitCanvasToBitmap());
+      statusText.textContent = 'Image loaded — set puzzle pieces & rounds, then Start';
+      startBtn.disabled = false;
+      gameActive = false;
+      resetStatsDisplay();
+    } catch (err) {
+      console.error(err);
+      statusText.textContent = 'Could not load image';
+    }
+  });
+
+  function setPuzzleSurroundToTheme() {
+    const raw = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+    gutterColor = raw || '#0f1419';
+  }
+
+  function syncViewLayout() {
+    if (!displayW || !displayH) return;
+    const cssW = mainCanvas.width / canvasDpr;
+    const cssH = mainCanvas.height / canvasDpr;
+    const scale = Math.min(cssW / displayW, cssH / displayH);
+    viewDw = displayW * scale;
+    viewDh = displayH * scale;
+    viewOx = (cssW - viewDw) / 2;
+    viewOy = (cssH - viewDh) / 2;
+  }
+
+  function scaleBitmapIfNeeded(bmp) {
+    let w = bmp.width;
+    let h = bmp.height;
+    const max = Math.max(w, h);
+    if (max <= MAX_BITMAP_EDGE) return bmp;
+    const scale = MAX_BITMAP_EDGE / max;
+    w = Math.round(w * scale);
+    h = Math.round(h * scale);
+    return createImageBitmap(bmp, { resizeWidth: w, resizeHeight: h, resizeQuality: 'high' });
+  }
+
+  function fitCanvasToBitmap() {
+    if (!bitmap || !displayW || !displayH) return;
+    const wrap = document.getElementById('canvasWrap');
+    let maxW = wrap.clientWidth;
+    let maxH = wrap.clientHeight;
+    if (maxW < 48) maxW = Math.max(48, window.innerWidth - 48);
+    if (maxH < 120) {
+      const top = wrap.getBoundingClientRect().top;
+      maxH = Math.max(260, window.innerHeight - top - 24);
+    }
+    const ar = displayW / displayH;
+    let cssW = maxW;
+    let cssH = cssW / ar;
+    if (cssH > maxH) {
+      cssH = maxH;
+      cssW = cssH * ar;
+    }
+    mainCanvas.style.width = cssW + 'px';
+    mainCanvas.style.height = cssH + 'px';
+    canvasDpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    mainCanvas.width = Math.round(cssW * canvasDpr);
+    mainCanvas.height = Math.round(cssH * canvasDpr);
+    ctx.setTransform(canvasDpr, 0, 0, canvasDpr, 0, 0);
+    syncViewLayout();
+    drawFullReference();
+    if (gameActive && currentIndex >= 0) {
+      drawPiecePreview(pieces[queue[currentIndex]]);
+    }
+  }
+
+  window.addEventListener('resize', () => {
+    if (bitmap) fitCanvasToBitmap();
+  });
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', () => {
+      if (bitmap) fitCanvasToBitmap();
+    });
+  }
+
+  const canvasResizeObserver = typeof ResizeObserver !== 'undefined'
+    ? new ResizeObserver(() => {
+        if (bitmap) fitCanvasToBitmap();
+      })
+    : null;
+  if (canvasResizeObserver) {
+    canvasResizeObserver.observe(document.getElementById('canvasWrap'));
+  }
+
+  function applySidebarSide(val) {
+    const v = val === 'left' ? 'left' : 'right';
+    gameArea.classList.toggle('sidebar-left', v === 'left');
+    sidebarSideSelect.value = v;
+    try {
+      localStorage.setItem(SIDEBAR_SIDE_KEY, v);
+    } catch (_) {}
+    requestAnimationFrame(() => {
+      if (bitmap) fitCanvasToBitmap();
+    });
+  }
+
+  sidebarSideSelect.addEventListener('change', () => {
+    applySidebarSide(sidebarSideSelect.value);
+  });
+
+  try {
+    const saved = localStorage.getItem(SIDEBAR_SIDE_KEY);
+    if (saved === 'left' || saved === 'right') {
+      gameArea.classList.toggle('sidebar-left', saved === 'left');
+      sidebarSideSelect.value = saved;
+    }
+  } catch (_) {}
+
+  function drawFullReference() {
+    if (!bitmap) return;
+    const cssW = mainCanvas.width / canvasDpr;
+    const cssH = mainCanvas.height / canvasDpr;
+    syncViewLayout();
+    ctx.fillStyle = gutterColor;
+    ctx.fillRect(0, 0, cssW, cssH);
+    ctx.drawImage(bitmap, 0, 0, displayW, displayH, viewOx, viewOy, viewDw, viewDh);
+  }
+
+  /** Five compatible profiles: scale bump span + depth only (same topology = always mates). */
+  const EDGE_SHAPE_VARIANT = [
+    { hw: 1.0, d: 1.0 },
+    { hw: 1.08, d: 0.92 },
+    { hw: 0.92, d: 1.08 },
+    { hw: 1.05, d: 1.15 },
+    { hw: 0.95, d: 0.85 },
+  ];
+
+  function applyEdgeVariant(ik, styleIndex) {
+    const v = EDGE_SHAPE_VARIANT[Math.max(0, Math.min(4, styleIndex))];
+    const hw = ik.hw * v.hw;
+    const d = ik.d * v.d;
+    return { hw, nw: hw * 0.44, d: Math.max(d, 2) };
+  }
+
+  /** Random seam: tab direction + one of five shapes (0–4). */
+  function randomEncodedEdge() {
+    const style = Math.floor(gameRand() * 5);
+    const positive = gameRand() < 0.5;
+    return positive ? style + 1 : -(style + 1);
+  }
+
+  function seamStyle(code) {
+    return Math.abs(code) - 1;
+  }
+
+  /**
+   * “Lightbulb” interlock along one edge (narrow neck, wider head, ~27% depth).
+   */
+  function interlockParams(edgeLen, cellShort) {
+    const hw = Math.min(edgeLen * 0.21, cellShort * 0.46);
+    const nw = hw * 0.44;
+    const d = Math.min(edgeLen, cellShort) * 0.275;
+    return { hw, nw, d: Math.max(d, 2.5) };
+  }
+
+  /** Pad bitmap crop / scoring beyond cell for widest tab (includes largest variant scale). */
+  function interlockPad(cw, ch) {
+    const cs = Math.min(cw, ch);
+    const base = interlockParams(cs, cs);
+    let maxReach = 0;
+    for (let s = 0; s < 5; s++) {
+      const ik = applyEdgeVariant(base, s);
+      maxReach = Math.max(maxReach, ik.hw + ik.d);
+    }
+    return maxReach + 3;
+  }
+
+  /**
+   * Pick rows×cols from desired piece count and image aspect (wide images → more columns).
+   * Prefer an exact R×C = N when possible; otherwise closest product to N.
+   */
+  function dimensionsFromPieceCount(targetPieces, imgW, imgH) {
+    const requested = Math.max(4, Math.min(512, Math.round(Number(targetPieces)) || 24));
+    const aspect = imgW / imgH;
+    const exact = [];
+    const maxDim = 48;
+    for (let r = 2; r <= maxDim; r++) {
+      for (let c = 2; c <= maxDim; c++) {
+        if (r * c !== requested) continue;
+        const arErr = Math.abs(c / r - aspect);
+        exact.push({ rows: r, cols: c, arErr });
+      }
+    }
+    if (exact.length) {
+      exact.sort((a, b) => a.arErr - b.arErr);
+      return {
+        rows: exact[0].rows,
+        cols: exact[0].cols,
+        requested,
+        actual: requested,
+      };
+    }
+    let best = { score: Infinity, rows: 2, cols: 2, actual: 4 };
+    for (let r = 2; r <= maxDim; r++) {
+      for (let c = 2; c <= maxDim; c++) {
+        const prod = r * c;
+        const diff = Math.abs(prod - requested);
+        const arErr = Math.abs(c / r - aspect);
+        const score = diff * 40 + arErr;
+        if (score < best.score) {
+          best = { score, rows: r, cols: c, actual: prod };
+        }
+      }
+    }
+    return {
+      rows: best.rows,
+      cols: best.cols,
+      requested,
+      actual: best.actual,
+    };
+  }
+
+  function buildJigsawEdges(nRows, nCols) {
+    horiz = [];
+    for (let r = 0; r < nRows - 1; r++) {
+      horiz[r] = [];
+      for (let c = 0; c < nCols; c++) horiz[r][c] = randomEncodedEdge();
+    }
+    vert = [];
+    for (let r = 0; r < nRows; r++) {
+      vert[r] = [];
+      for (let c = 0; c < nCols - 1; c++) vert[r][c] = randomEncodedEdge();
+    }
+  }
+
+  /**
+   * One smooth quadratic bump along a horizontal segment (no folded cubics → no accidental V spikes).
+   * Current point must be (xL, y0). Ends at (xR, y0).
+   */
+  function appendHorizontalBulb(path, xL, xR, y0, normalY, isSocket, ik) {
+    const { hw, d } = ik;
+    const mid = (xL + xR) / 2;
+    const inward = isSocket ? 1 : -1;
+    const depth = normalY * inward * d;
+    path.quadraticCurveTo(mid, y0 + depth, xR, y0);
+  }
+
+  /** Same bump, drawn from right shoulder to left (current point = xR, y0). */
+  function appendHorizontalBulbRTL(path, xL, xR, y0, normalY, isSocket, ik) {
+    const { hw, d } = ik;
+    const mid = (xL + xR) / 2;
+    const inward = isSocket ? 1 : -1;
+    const depth = normalY * inward * d;
+    path.quadraticCurveTo(mid, y0 + depth, xL, y0);
+  }
+
+  /** Vertical bump top → bottom; current (x0, yTop), ends (x0, yBottom). */
+  function appendVerticalBulbDown(path, x0, yTop, yBottom, normalX, isSocket, ik) {
+    const { d } = ik;
+    const mid = (yTop + yBottom) / 2;
+    const inward = isSocket ? 1 : -1;
+    const depth = normalX * inward * d;
+    path.quadraticCurveTo(x0 + depth, mid, x0, yBottom);
+  }
+
+  /** Vertical bump bottom → top; current (x0, yBottom), ends (x0, yTop). */
+  function appendVerticalBulbUp(path, x0, yTop, yBottom, normalX, isSocket, ik) {
+    const { d } = ik;
+    const mid = (yTop + yBottom) / 2;
+    const inward = isSocket ? 1 : -1;
+    const depth = normalX * inward * d;
+    path.quadraticCurveTo(x0 + depth, mid, x0, yTop);
+  }
+
+  /**
+   * Piece outline in local coords; bulb knobs/holes with seam style 0–4 + tab direction per edge.
+   */
+  function createLocalPiecePath(r, c, cw, ch, nRows, nCols) {
+    const cellShort = Math.min(cw, ch);
+    const ikHBase = interlockParams(cw, cellShort);
+    const ikVBase = interlockParams(ch, cellShort);
+    const midX = cw / 2;
+    const midY = ch / 2;
+    const path = new Path2D();
+    path.moveTo(0, 0);
+
+    // Top edge. Upper row tab down → our socket (indent). Lower tab up would be positive from below — encoded on seam above us.
+    if (r === 0) {
+      path.lineTo(cw, 0);
+    } else {
+      const seam = horiz[r - 1][c];
+      const ikH = applyEdgeVariant(ikHBase, seamStyle(seam));
+      const hwH = ikH.hw;
+      const topSocket = seam > 0;
+      path.lineTo(midX - hwH, 0);
+      appendHorizontalBulb(path, midX - hwH, midX + hwH, 0, 1, topSocket, ikH);
+      path.lineTo(cw, 0);
+    }
+
+    // Right edge. Left neighbor tab → our socket.
+    if (c === nCols - 1) {
+      path.lineTo(cw, ch);
+    } else {
+      const seam = vert[r][c];
+      const ikV = applyEdgeVariant(ikVBase, seamStyle(seam));
+      const hwV = ikV.hw;
+      const rightSocket = seam < 0;
+      path.lineTo(cw, midY - hwV);
+      appendVerticalBulbDown(path, cw, midY - hwV, midY + hwV, -1, rightSocket, ikV);
+      path.lineTo(cw, ch);
+    }
+
+    // Bottom edge. We tab down if seam > 0 (upper definition: positive = tab from row r into row r+1).
+    if (r === nRows - 1) {
+      path.lineTo(0, ch);
+    } else {
+      const seam = horiz[r][c];
+      const ikH = applyEdgeVariant(ikHBase, seamStyle(seam));
+      const hwH = ikH.hw;
+      const bottomSocket = seam < 0;
+      path.lineTo(midX + hwH, ch);
+      appendHorizontalBulbRTL(path, midX - hwH, midX + hwH, ch, -1, bottomSocket, ikH);
+      path.lineTo(0, ch);
+    }
+
+    // Left edge. Neighbor left tabs → our socket.
+    if (c === 0) {
+      path.lineTo(0, 0);
+    } else {
+      const seam = vert[r][c - 1];
+      const ikV = applyEdgeVariant(ikVBase, seamStyle(seam));
+      const hwV = ikV.hw;
+      const leftSocket = seam > 0;
+      path.lineTo(0, midY + hwV);
+      appendVerticalBulbUp(path, 0, midY - hwV, midY + hwV, 1, leftSocket, ikV);
+      path.lineTo(0, 0);
+    }
+
+    path.closePath();
+    return path;
+  }
+
+  function pathToBitmap(localPath, sx, sy) {
+    const p = new Path2D();
+    p.addPath(localPath, new DOMMatrix([1, 0, 0, 1, sx, sy]));
+    return p;
+  }
+
+  function hDepth(normalY, isSocket, ik) {
+    const inward = isSocket ? 1 : -1;
+    return normalY * inward * ik.d;
+  }
+
+  function vDepth(normalX, isSocket, ik) {
+    const inward = isSocket ? 1 : -1;
+    return normalX * inward * ik.d;
+  }
+
+  /**
+   * Samples the piece outline in bitmap pixels (matches createLocalPiecePath) for distance-to-edge scoring.
+   */
+  function buildOutlinePolylineBmp(r, c, cw, ch, nRows, nCols, sx, sy) {
+    const QUAD = 20;
+    const cellShort = Math.min(cw, ch);
+    const ikHBase = interlockParams(cw, cellShort);
+    const ikVBase = interlockParams(ch, cellShort);
+    const midX = cw / 2;
+    const midY = ch / 2;
+    const pts = [];
+
+    const L = (ax, ay, bx, by, n) => {
+      n = Math.max(1, n);
+      for (let i = 1; i <= n; i++) {
+        const t = i / n;
+        pts.push({ x: sx + ax + (bx - ax) * t, y: sy + ay + (by - ay) * t });
+      }
+    };
+    const Q = (x0, y0, cpx, cpy, x1, y1) => {
+      for (let i = 1; i <= QUAD; i++) {
+        const t = i / QUAD;
+        const u = 1 - t;
+        pts.push({
+          x: sx + u * u * x0 + 2 * u * t * cpx + t * t * x1,
+          y: sy + u * u * y0 + 2 * u * t * cpy + t * t * y1,
+        });
+      }
+    };
+
+    pts.push({ x: sx, y: sy });
+    if (r === 0) {
+      L(0, 0, cw, 0, Math.max(4, Math.ceil(cw / 32)));
+    } else {
+      const seam = horiz[r - 1][c];
+      const ikH = applyEdgeVariant(ikHBase, seamStyle(seam));
+      const hwH = ikH.hw;
+      const topSocket = seam > 0;
+      const dep = hDepth(1, topSocket, ikH);
+      L(0, 0, midX - hwH, 0, Math.max(2, Math.ceil((midX - hwH) / 32)));
+      Q(midX - hwH, 0, midX, 0 + dep, midX + hwH, 0);
+      L(midX + hwH, 0, cw, 0, Math.max(2, Math.ceil((cw - midX - hwH) / 32)));
+    }
+    if (c === nCols - 1) {
+      L(cw, 0, cw, ch, Math.max(4, Math.ceil(ch / 32)));
+    } else {
+      const seam = vert[r][c];
+      const ikV = applyEdgeVariant(ikVBase, seamStyle(seam));
+      const hwV = ikV.hw;
+      const rightSocket = seam < 0;
+      const dep = vDepth(-1, rightSocket, ikV);
+      L(cw, 0, cw, midY - hwV, Math.max(2, Math.ceil((midY - hwV) / 32)));
+      Q(cw, midY - hwV, cw + dep, midY, cw, midY + hwV);
+      L(cw, midY + hwV, cw, ch, Math.max(2, Math.ceil((ch - midY - hwV) / 32)));
+    }
+    if (r === nRows - 1) {
+      L(cw, ch, 0, ch, Math.max(4, Math.ceil(cw / 32)));
+    } else {
+      const seam = horiz[r][c];
+      const ikH = applyEdgeVariant(ikHBase, seamStyle(seam));
+      const hwH = ikH.hw;
+      const bottomSocket = seam < 0;
+      const dep = hDepth(-1, bottomSocket, ikH);
+      L(cw, ch, midX + hwH, ch, Math.max(2, Math.ceil((cw - midX - hwH) / 32)));
+      Q(midX + hwH, ch, midX, ch + dep, midX - hwH, ch);
+      L(midX - hwH, ch, 0, ch, Math.max(2, Math.ceil((midX - hwH) / 32)));
+    }
+    if (c === 0) {
+      L(0, ch, 0, 0, Math.max(4, Math.ceil(ch / 32)));
+    } else {
+      const seam = vert[r][c - 1];
+      const ikV = applyEdgeVariant(ikVBase, seamStyle(seam));
+      const hwV = ikV.hw;
+      const leftSocket = seam > 0;
+      const dep = vDepth(1, leftSocket, ikV);
+      L(0, ch, 0, midY + hwV, Math.max(2, Math.ceil((ch - midY - hwV) / 32)));
+      Q(0, midY + hwV, dep, midY, 0, midY - hwV);
+      L(0, midY - hwV, 0, 0, Math.max(2, Math.ceil((midY - hwV) / 32)));
+    }
+    return pts;
+  }
+
+  function distPointToSegment(px, py, ax, ay, bx, by) {
+    const vx = bx - ax;
+    const vy = by - ay;
+    const wx = px - ax;
+    const wy = py - ay;
+    const c1 = vx * wx + vy * wy;
+    if (c1 <= 0) return Math.hypot(px - ax, py - ay);
+    const c2 = vx * vx + vy * vy;
+    if (c2 <= c1) return Math.hypot(px - bx, py - by);
+    const t = c1 / c2;
+    return Math.hypot(px - (ax + t * vx), py - (ay + t * vy));
+  }
+
+  function minDistToClosedPolyline(px, py, pts) {
+    if (pts.length < 2) return Infinity;
+    let min = Infinity;
+    const n = pts.length;
+    for (let i = 0; i < n; i++) {
+      const a = pts[i];
+      const b = pts[(i + 1) % n];
+      const d = distPointToSegment(px, py, a.x, a.y, b.x, b.y);
+      if (d < min) min = d;
+    }
+    return min;
+  }
+
+  /** Hit-test in bitmap pixel coordinates (path stored in bitmap space). */
+  function isPointInPieceBmp(pathBmp, ix, iy) {
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const hit = ctx.isPointInPath(pathBmp, ix, iy);
+    ctx.restore();
+    return hit;
+  }
+
+  /** Loose AABB around piece knobs in bitmap space (for preview crop). */
+  function pieceBitmapBounds(piece) {
+    const pad = interlockPad(piece.cw, piece.ch);
+    return {
+      minX: Math.max(0, piece.sx - pad),
+      minY: Math.max(0, piece.sy - pad),
+      maxX: Math.min(displayW, piece.sx + piece.cw + pad),
+      maxY: Math.min(displayH, piece.sy + piece.ch + pad),
+    };
+  }
+
+  /**
+   * Tight axis-aligned bounds of the actual outline (same silhouette as clip path).
+   * `pieceBitmapBounds` is padded to the cell grid and biases centering (e.g. bottom-edge
+   * pieces looked stuck to the bottom of the preview).
+   */
+  function piecePreviewBounds(piece) {
+    const pts = piece.outlinePolyBmp;
+    if (!pts || pts.length === 0) return pieceBitmapBounds(piece);
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i];
+      minX = Math.min(minX, p.x);
+      minY = Math.min(minY, p.y);
+      maxX = Math.max(maxX, p.x);
+      maxY = Math.max(maxY, p.y);
+    }
+    if (!Number.isFinite(minX)) return pieceBitmapBounds(piece);
+    return { minX, minY, maxX, maxY };
+  }
+
+  function pathBmpToCss(pathBmp) {
+    const sx = viewDw / displayW;
+    const sy = viewDh / displayH;
+    const m = new DOMMatrix([sx, 0, 0, sy, viewOx, viewOy]);
+    const p = new Path2D();
+    p.addPath(pathBmp, m);
+    return p;
+  }
+
+  function buildPieces() {
+    const dim = dimensionsFromPieceCount(pieceCountInput.value, displayW, displayH);
+    rows = dim.rows;
+    cols = dim.cols;
+    pieceCountInput.value = String(dim.requested);
+    const gridLabel = dim.actual === dim.requested
+      ? `${cols}×${rows} (${dim.actual})`
+      : `${cols}×${rows} (${dim.actual}, target ${dim.requested})`;
+    gridInfo.textContent = gridLabel;
+    buildJigsawEdges(rows, cols);
+    const cw = displayW / cols;
+    const ch = displayH / rows;
+    pieces = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const sx = c * cw;
+        const sy = r * ch;
+        const localPath = createLocalPiecePath(r, c, cw, ch, rows, cols);
+        const pathBmp = pathToBitmap(localPath, sx, sy);
+        pieces.push({
+          row: r,
+          col: c,
+          sx,
+          sy,
+          cw,
+          ch,
+          cx: sx + cw / 2,
+          cy: sy + ch / 2,
+          localPath,
+          pathBmp,
+          outlinePolyBmp: buildOutlinePolylineBmp(r, c, cw, ch, rows, cols, sx, sy),
+        });
+      }
+    }
+  }
+
+  function shuffleArray(arr) {
+    const rand = gameRand;
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      const t = arr[i];
+      arr[i] = arr[j];
+      arr[j] = t;
+    }
+  }
+
+  /** Build play order: `target` rounds; cycles shuffled decks if rounds > puzzle pieces. */
+  function buildRoundQueue() {
+    const raw = roundsInput.value;
+    let target = Math.round(Number(raw));
+    if (!Number.isFinite(target)) target = 12;
+    target = Math.max(1, Math.min(1000, target));
+    roundsInput.value = String(target);
+
+    const n = pieces.length;
+    if (!n) return [];
+    const q = [];
+    while (q.length < target) {
+      const batch = [];
+      for (let i = 0; i < n; i++) batch.push(i);
+      shuffleArray(batch);
+      for (let i = 0; i < batch.length && q.length < target; i++) q.push(batch[i]);
+    }
+    return q;
+  }
+
+  startBtn.addEventListener('click', () => {
+    if (!bitmap) return;
+    const seed = randomSeedString();
+    seedInput.value = seed;
+    gameRand = mulberry32(seedKeyToUint32(seed));
+    buildPieces();
+    queue = buildRoundQueue();
+    currentIndex = 0;
+    sumTime = 0;
+    sumEdgeDist = 0;
+    completed = 0;
+    sessionHits = 0;
+    gameActive = true;
+    totalRounds.textContent = queue.length;
+    statusText.textContent = 'Game on — tap the image';
+    hideSessionSummary();
+    startRound();
+  });
+
+  function resetStatsDisplay() {
+    hideSessionSummary();
+    gridInfo.textContent = '—';
+    roundText.textContent = '—';
+    totalRounds.textContent = '—';
+    lastTime.textContent = '—';
+    lastEdge.textContent = '—';
+    avgTime.textContent = '—';
+    avgEdge.textContent = '—';
+    roundMsg.textContent = '';
+  }
+
+  function startRound() {
+    if (currentIndex >= queue.length) {
+      gameActive = false;
+      statusText.textContent = 'Done! Change settings or load a new image.';
+      roundText.textContent = String(queue.length);
+      return;
+    }
+    const piece = pieces[queue[currentIndex]];
+    roundText.textContent = String(currentIndex + 1);
+    drawFullReference();
+    drawPiecePreview(piece);
+    roundStart = performance.now();
+    roundMsg.textContent = '';
+  }
+
+  function drawPiecePreview(piece) {
+    const { minX, minY, maxX, maxY } = piecePreviewBounds(piece);
+    const bw = Math.max(1e-6, maxX - minX);
+    const bh = Math.max(1e-6, maxY - minY);
+    const cxBmp = (minX + maxX) / 2;
+    const cyBmp = (minY + maxY) / 2;
+    const margin = 8;
+    const maxSide = Math.min(220, Math.floor(window.innerWidth * 0.45));
+    /** Uniform scale so shape isn’t skewed; fit inside maxSide minus margin. */
+    const S = Math.min((maxSide - margin * 2) / bw, (maxSide - margin * 2) / bh, 3);
+    const drawW = bw * S;
+    const drawH = bh * S;
+    const pw = Math.max(64, drawW);
+    const ph = Math.max(64, drawH);
+    pieceCanvas.style.width = pw + 'px';
+    pieceCanvas.style.height = ph + 'px';
+    const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    pieceCanvas.width = Math.round(pw * dpr);
+    pieceCanvas.height = Math.round(ph * dpr);
+
+    pctx.setTransform(1, 0, 0, 1, 0, 0);
+    pctx.clearRect(0, 0, pieceCanvas.width, pieceCanvas.height);
+    pctx.imageSmoothingEnabled = true;
+    pctx.imageSmoothingQuality = 'high';
+
+    /**
+     * Map bitmap → preview: center of bounds (cxBmp, cyBmp) → center of canvas (pw/2, ph/2).
+     * Avoids pieces hugging the same corner as in the full image (e.g. right-edge tabs).
+     */
+    const tx = (-cxBmp * S + pw / 2) * dpr;
+    const ty = (-cyBmp * S + ph / 2) * dpr;
+    pctx.setTransform(S * dpr, 0, 0, S * dpr, tx, ty);
+
+    const clipPath = new Path2D();
+    clipPath.addPath(piece.pathBmp);
+    pctx.clip(clipPath);
+    pctx.drawImage(bitmap, 0, 0, displayW, displayH, 0, 0, displayW, displayH);
+
+    pctx.strokeStyle = 'rgba(255,255,255,0.45)';
+    pctx.lineJoin = 'round';
+    const strokeScale = S * dpr;
+    pctx.lineWidth = strokeScale > 0 ? Math.max(1, 2 / strokeScale) : 2;
+    pctx.stroke(clipPath);
+
+    pctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+
+  function cssPointFromEvent(ev) {
+    const rect = mainCanvas.getBoundingClientRect();
+    const x = ev.clientX - rect.left;
+    const y = ev.clientY - rect.top;
+    return { x, y };
+  }
+
+  function cssToImageCoords(cssX, cssY) {
+    if (viewDw <= 0 || viewDh <= 0) {
+      return { ix: 0, iy: 0 };
+    }
+    const ix = ((cssX - viewOx) / viewDw) * displayW;
+    const iy = ((cssY - viewOy) / viewDh) * displayH;
+    return { ix, iy };
+  }
+
+  /** Format milliseconds as seconds with 2 decimal places. */
+  function fmtSeconds(ms) {
+    return (ms / 1000).toFixed(2) + ' s';
+  }
+
+  const SCORE_W_HIT = 0.4;
+  const SCORE_W_TIME = 0.35;
+  const SCORE_W_DIST = 0.25;
+  /** ~6 s avg per round → speed score ~37%; faster approaches 100%. */
+  const TIME_DECAY_SEC = 6;
+  /** Subtract this many points per px of average miss distance (when there are misses). */
+  const DIST_PENALTY_PER_PX = 1.5;
+
+  function buildSessionSummary(rounds, hits, sumTimeMs, sumMissDistPx) {
+    const misses = rounds - hits;
+    const totalSec = sumTimeMs / 1000;
+    const avgSecPerRound = rounds ? totalSec / rounds : 0;
+    const avgMissPx = misses ? sumMissDistPx / misses : 0;
+
+    const hitScore = rounds ? (hits / rounds) * 100 : 0;
+    const timeScore = Math.max(0, 100 * Math.exp(-avgSecPerRound / TIME_DECAY_SEC));
+    const distScore =
+      misses === 0 ? 100 : Math.max(0, 100 - avgMissPx * DIST_PENALTY_PER_PX);
+
+    const composite =
+      hitScore * SCORE_W_HIT + timeScore * SCORE_W_TIME + distScore * SCORE_W_DIST;
+
+    return {
+      rounds,
+      hits,
+      misses,
+      totalSec,
+      avgSecPerRound,
+      avgMissPx,
+      sumMissDistPx,
+      hitScore,
+      timeScore,
+      distScore,
+      composite,
+    };
+  }
+
+  function renderSessionSummary(s) {
+    compositeScoreLine.textContent = `Composite: ${s.composite.toFixed(1)} / 100`;
+    const contribHit = s.hitScore * SCORE_W_HIT;
+    const contribTime = s.timeScore * SCORE_W_TIME;
+    const contribDist = s.distScore * SCORE_W_DIST;
+    scoreBreakdown.innerHTML = [
+      '<table class="breakdown-table">',
+      '<tr><td>Rounds</td><td>',
+      s.rounds,
+      ' · ',
+      '<strong>',
+      s.hits,
+      '</strong> hits · ',
+      '<strong>',
+      s.misses,
+      '</strong> misses',
+      '</td></tr>',
+      '<tr><td>Total time</td><td>',
+      s.totalSec.toFixed(2),
+      ' s</td></tr>',
+      '<tr><td>Avg time / round</td><td>',
+      s.avgSecPerRound.toFixed(2),
+      ' s</td></tr>',
+      '<tr><td>Miss distance</td><td>',
+      s.misses
+        ? `${s.sumMissDistPx.toFixed(1)} px total · ${s.avgMissPx.toFixed(1)} px avg (miss rounds only)`
+        : '— (no misses)',
+      '</td></tr>',
+      '</table>',
+      '<hr>',
+      '<div style="font-size:0.8rem;color:var(--muted);margin-bottom:6px">Score breakdown (each 0–100, then weighted)</div>',
+      '<table class="breakdown-table">',
+      '<tr><td>Placement (hits)</td><td>',
+      s.hitScore.toFixed(1),
+      ` × ${(SCORE_W_HIT * 100).toFixed(0)}% → `,
+      contribHit.toFixed(1),
+      ' pts',
+      '</td></tr>',
+      '<tr><td>Speed</td><td>',
+      s.timeScore.toFixed(1),
+      ` × ${(SCORE_W_TIME * 100).toFixed(0)}% → `,
+      contribTime.toFixed(1),
+      ' pts',
+      '</td></tr>',
+      '<tr><td>Precision (misses)</td><td>',
+      s.distScore.toFixed(1),
+      ` × ${(SCORE_W_DIST * 100).toFixed(0)}% → `,
+      contribDist.toFixed(1),
+      ' pts',
+      '</td></tr>',
+      '</table>',
+      '<p style="font-size:0.75rem;color:var(--muted);margin:10px 0 0;line-height:1.4">',
+      'Speed score uses avg seconds per round (faster is better). ',
+      'Precision penalizes average px from the outline on miss rounds only.',
+      '</p>',
+    ].join('');
+    gameSummary.style.display = 'block';
+  }
+
+  function hideSessionSummary() {
+    gameSummary.style.display = 'none';
+    compositeScoreLine.textContent = '';
+    scoreBreakdown.innerHTML = '';
+  }
+
+  /**
+   * Inside the piece silhouette → hit (0 px). Outside → shortest distance in pixels to the outline polyline.
+   */
+  function scoreRound(ix, iy, piece) {
+    if (isPointInPieceBmp(piece.pathBmp, ix, iy)) {
+      return { inside: true, edgeDist: 0 };
+    }
+    const edgeDist = minDistToClosedPolyline(ix, iy, piece.outlinePolyBmp);
+    return { inside: false, edgeDist };
+  }
+
+  function flashCorrectRect(piece) {
+    const pCss = pathBmpToCss(piece.pathBmp);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(52, 211, 153, 0.95)';
+    ctx.lineWidth = 3;
+    ctx.lineJoin = 'round';
+    ctx.stroke(pCss);
+    ctx.restore();
+    setTimeout(() => {
+      drawFullReference();
+      if (gameActive && currentIndex >= 0 && currentIndex < queue.length) {
+        drawPiecePreview(pieces[queue[currentIndex]]);
+      }
+    }, 650);
+  }
+
+  function handlePlacement(ev) {
+    if (!gameActive || currentIndex < 0 || currentIndex >= queue.length) return;
+    ev.preventDefault();
+    const { x, y } = cssPointFromEvent(ev);
+    const cssW = mainCanvas.width / canvasDpr;
+    const cssH = mainCanvas.height / canvasDpr;
+    if (x < 0 || y < 0 || x > cssW || y > cssH) return;
+
+    const piece = pieces[queue[currentIndex]];
+    const { ix, iy } = cssToImageCoords(x, y);
+    const elapsed = performance.now() - roundStart;
+    const { inside, edgeDist } = scoreRound(ix, iy, piece);
+    if (inside) sessionHits++;
+
+    lastTime.textContent = fmtSeconds(elapsed);
+    lastEdge.textContent = inside ? 'Hit (inside)' : `${edgeDist.toFixed(1)} px from edge`;
+
+    sumTime += elapsed;
+    sumEdgeDist += edgeDist;
+    completed++;
+    avgTime.textContent = fmtSeconds(sumTime / completed);
+    avgEdge.textContent = (sumEdgeDist / completed).toFixed(1) + ' px';
+
+    roundMsg.textContent = inside
+      ? 'Hit — tap was inside the piece outline.'
+      : `Miss — ${edgeDist.toFixed(1)} px from the nearest edge.`;
+    roundMsg.className = 'round-msg ' + (inside ? 'good' : 'bad');
+
+    flashCorrectRect(piece);
+
+    currentIndex++;
+    setTimeout(() => {
+      if (currentIndex < queue.length) startRound();
+      else {
+        gameActive = false;
+        statusText.textContent = 'Finished all rounds! See session results below.';
+        roundText.textContent = String(queue.length);
+        pctx.clearRect(0, 0, pieceCanvas.width, pieceCanvas.height);
+        const summary = buildSessionSummary(queue.length, sessionHits, sumTime, sumEdgeDist);
+        renderSessionSummary(summary);
+      }
+    }, 700);
+  }
+
+  mainCanvas.addEventListener('pointerdown', (ev) => {
+    if (ev.pointerType === 'mouse' && ev.button !== 0) return;
+    mainCanvas.setPointerCapture(ev.pointerId);
+    handlePlacement(ev);
+  }, { passive: false });
+
+  /* Fallback for environments without Pointer Events (rare) */
+  if (!window.PointerEvent) {
+    mainCanvas.addEventListener(
+      'touchend',
+      (ev) => {
+        ev.preventDefault();
+        if (!ev.changedTouches || !ev.changedTouches.length) return;
+        const t = ev.changedTouches[0];
+        handlePlacement(t);
+      },
+      { passive: false }
+    );
+  }
+})();
+  </script>
+</body>
+</html>
