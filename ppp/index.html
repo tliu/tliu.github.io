@@ -448,12 +448,92 @@
       font-size: 0.85rem;
       color: var(--muted);
     }
+
+    .piece-preview-label {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    /**
+     * Touch devices: while playing, hide setup chrome and stats so the canvas + piece use the screen.
+     * Desktop (hover-capable) keeps the full UI visible during play.
+     */
+    @media (hover: none) {
+      html.game-play-active body {
+        padding: max(2px, env(safe-area-inset-top, 0px)) max(4px, env(safe-area-inset-right, 0px))
+          max(2px, env(safe-area-inset-bottom, 0px)) max(4px, env(safe-area-inset-left, 0px));
+      }
+
+      html.game-play-active .app-chrome {
+        display: none !important;
+      }
+
+      html.game-play-active .side-col #statsPanel,
+      html.game-play-active .side-col #gameSummary {
+        display: none !important;
+      }
+    }
+
+    /** Landscape phones/tablets: board + piece strip side by side while playing */
+    @media (hover: none) and (orientation: landscape) {
+      html.game-play-active .game-area {
+        flex: 1;
+        min-height: 0;
+        flex-direction: row;
+        align-items: stretch;
+        gap: 6px;
+        margin: 0;
+      }
+
+      html.game-play-active .game-area.sidebar-left {
+        flex-direction: row-reverse;
+      }
+
+      html.game-play-active .main-col {
+        flex: 1;
+        min-width: 0;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+      }
+
+      html.game-play-active .side-col {
+        width: min(40vw, 200px) !important;
+        max-width: 50%;
+        flex-shrink: 0;
+        min-height: 0;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+      }
+
+      html.game-play-active .piece-preview-wrap.panel {
+        margin-bottom: 0;
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        padding: 8px 10px;
+      }
+
+      html.game-play-active .piece-preview-label {
+        font-size: 0.72rem;
+        flex-shrink: 0;
+      }
+
+      html.game-play-active .piece-preview-inner {
+        min-height: 0;
+        flex: 1;
+        padding: 2px 0;
+      }
+    }
   </style>
 </head>
 <body>
-  <h1>Where does this piece go?</h1>
+  <h1 class="app-chrome">Where does this piece go?</h1>
 
-  <div class="mode-toggle-wrap">
+  <div class="mode-toggle-wrap app-chrome">
     <label class="mode-toggle">
       <input type="checkbox" id="oneClickModeToggle">
       One click mode
@@ -461,7 +541,7 @@
     <span class="mode-toggle-hint">Off: guess until you tap inside the piece. On: each tap counts as a round.</span>
   </div>
 
-  <div class="panel controls">
+  <div class="panel controls app-chrome">
     <input type="file" id="fileInput" class="hidden-file" accept="image/*">
     <button type="button" class="btn secondary" id="pickImageBtn">Upload image</button>
     <button type="button" class="btn secondary" id="pickLibraryBtn">Select image…</button>
@@ -488,7 +568,7 @@
     </div>
     <div class="side-col">
       <div class="panel piece-preview-wrap">
-        <span style="font-size:0.85rem;color:var(--muted)">Your piece</span>
+        <span class="piece-preview-label">Your piece</span>
         <div class="piece-preview-inner">
           <canvas id="pieceCanvas" width="160" height="160"></canvas>
         </div>
@@ -587,6 +667,10 @@
   let currentIndex = -1;
   let roundStart = 0;
   let gameActive = false;
+
+  function syncPlayUiMode() {
+    document.documentElement.classList.toggle('game-play-active', Boolean(gameActive));
+  }
 
   let sumTime = 0;
   let sumEdgeDist = 0;
@@ -703,6 +787,7 @@
     startBtn.disabled = false;
     gameActive = false;
     resetStatsDisplay();
+    syncPlayUiMode();
   }
 
   function closeLibraryModal() {
@@ -1447,6 +1532,7 @@
     totalRounds.textContent = queue.length;
     statusText.textContent = 'Game on — tap the image';
     hideSessionSummary();
+    syncPlayUiMode();
     startRound();
   });
 
@@ -1489,6 +1575,7 @@
     if (currentIndex >= queue.length) {
       gameActive = false;
       stopTotalTimeTicker();
+      syncPlayUiMode();
       statusText.textContent = 'Done! Change settings or load a new image.';
       roundText.textContent = String(queue.length);
       return;
@@ -1730,6 +1817,7 @@
         startRound();
       } else {
         gameActive = false;
+        syncPlayUiMode();
         stopTotalTimeTicker();
         updateTotalTimeLive();
         statusText.textContent = 'Finished all rounds! See session results below.';
@@ -1823,6 +1911,14 @@
       { passive: false }
     );
   }
+
+  window.addEventListener('orientationchange', () => {
+    requestAnimationFrame(() => {
+      if (bitmap) fitCanvasToBitmap();
+    });
+  });
+
+  syncPlayUiMode();
 })();
   </script>
 </body>
