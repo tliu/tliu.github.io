@@ -446,6 +446,16 @@
     }
   }
 
+  /** Uses the field as-is; only fills a random value when empty (Start does not overwrite a chosen seed). */
+  function ensureSeedString() {
+    let s = seedInput.value.trim();
+    if (!s) {
+      s = randomSeedString();
+      seedInput.value = s;
+    }
+    return s;
+  }
+
   randomSeedBtn.addEventListener('click', () => {
     seedInput.value = randomSeedString();
   });
@@ -1042,8 +1052,7 @@
 
   startBtn.addEventListener('click', () => {
     if (!bitmap) return;
-    const seed = randomSeedString();
-    seedInput.value = seed;
+    const seed = ensureSeedString();
     gameRand = mulberry32(seedKeyToUint32(seed));
     buildPieces();
     queue = buildRoundQueue();
