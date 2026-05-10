@@ -322,6 +322,132 @@
       line-height: 1.35;
       flex: 1 1 220px;
     }
+
+    .library-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 2000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: calc(16px + var(--safe-top)) calc(16px + var(--safe-right))
+        calc(16px + var(--safe-bottom)) calc(16px + var(--safe-left));
+    }
+
+    .library-modal.is-open {
+      display: flex;
+    }
+
+    .library-modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.72);
+      cursor: pointer;
+    }
+
+    .library-modal-panel {
+      position: relative;
+      width: min(920px, 100%);
+      max-height: min(88vh, 920px);
+      display: flex;
+      flex-direction: column;
+      background: var(--surface);
+      border-radius: 12px;
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+      overflow: hidden;
+    }
+
+    .library-modal-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid #2d3d52;
+      flex-shrink: 0;
+    }
+
+    .library-modal-head h2 {
+      margin: 0;
+      font-size: 1.05rem;
+      font-weight: 600;
+    }
+
+    .library-modal-close {
+      appearance: none;
+      border: none;
+      background: #2d3d52;
+      color: var(--text);
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      font-size: 1.5rem;
+      line-height: 1;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .library-modal-close:active {
+      transform: scale(0.96);
+    }
+
+    .library-modal-body {
+      padding: 14px 16px 18px;
+      overflow: auto;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .library-modal-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+      gap: 10px;
+    }
+
+    .library-thumb {
+      appearance: none;
+      border: 2px solid #2d3d52;
+      border-radius: 10px;
+      padding: 0;
+      margin: 0;
+      cursor: pointer;
+      overflow: hidden;
+      background: var(--bg);
+      aspect-ratio: 1;
+      display: block;
+      transition: border-color 0.15s ease, transform 0.12s ease;
+    }
+
+    .library-thumb:hover,
+    .library-thumb:focus-visible {
+      border-color: var(--accent);
+      outline: none;
+    }
+
+    .library-thumb:active {
+      transform: scale(0.98);
+    }
+
+    .library-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      vertical-align: middle;
+    }
+
+    .library-modal-empty {
+      margin: 0;
+      font-size: 0.9rem;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .library-modal-status {
+      margin: 0 0 12px;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
   </style>
 </head>
 <body>
@@ -337,7 +463,8 @@
 
   <div class="panel controls">
     <input type="file" id="fileInput" class="hidden-file" accept="image/*">
-    <button type="button" class="btn secondary" id="pickImageBtn">Choose image</button>
+    <button type="button" class="btn secondary" id="pickImageBtn">Upload image</button>
+    <button type="button" class="btn secondary" id="pickLibraryBtn">Select image…</button>
     <label>Puzzle pieces <input type="number" id="pieceCountInput" min="4" max="512" value="500" title="How the photo is cut; grid matches image shape"></label>
     <label>Rounds <input type="number" id="roundsInput" min="1" max="1000" value="12" title="How many placement turns; pieces may repeat if rounds exceed puzzle size"></label>
     <label title="Piece preview and stats column">Panel
@@ -387,10 +514,38 @@
     </div>
   </div>
 
+  <div class="library-modal" id="imageLibraryModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="libraryModalTitle">
+    <div class="library-modal-backdrop" id="libraryModalBackdrop" tabindex="-1"></div>
+    <div class="library-modal-panel">
+      <div class="library-modal-head">
+        <h2 id="libraryModalTitle">Images in library</h2>
+        <button type="button" class="library-modal-close" id="libraryModalClose" aria-label="Close">×</button>
+      </div>
+      <div class="library-modal-body">
+        <p class="library-modal-status" id="libraryModalStatus"></p>
+        <div class="library-modal-grid" id="libraryModalGrid"></div>
+        <p class="library-modal-empty" id="libraryModalEmpty" hidden>
+          No images listed. Edit the JSON array in this HTML file (<code>id=&quot;ppp-image-library&quot;</code>), put matching files next to this page under <code>images/</code>.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script type="application/json" id="ppp-image-library">
+  ["079346145058_puzzle_1500__24892.webp","10_18_19_a_dozen_dragons_low_res.avif","1291x897.jpg","1772x1172.jpg","2000x1385.webp","2000x1399.webp","c5753d_ab9e015ebe61488e8717deac4d94a339~mv2.avif","Magic Study_Rainbow_Version low res.avif","magical myth9ology lowres.avif","notre-dame-cathedral-paris-france-home-decor-wall-art-original-collage-multimedia-painting_1100x.webp","photo aug 12 2025, 1 30 51 pm.avif","Rose_Catherine_Khan_Dragon_Paradise_low_.avif"]
+  </script>
+
   <script>
 (function () {
   const fileInput = document.getElementById('fileInput');
   const pickImageBtn = document.getElementById('pickImageBtn');
+  const pickLibraryBtn = document.getElementById('pickLibraryBtn');
+  const imageLibraryModal = document.getElementById('imageLibraryModal');
+  const libraryModalBackdrop = document.getElementById('libraryModalBackdrop');
+  const libraryModalClose = document.getElementById('libraryModalClose');
+  const libraryModalGrid = document.getElementById('libraryModalGrid');
+  const libraryModalEmpty = document.getElementById('libraryModalEmpty');
+  const libraryModalStatus = document.getElementById('libraryModalStatus');
   const pieceCountInput = document.getElementById('pieceCountInput');
   const roundsInput = document.getElementById('roundsInput');
   const startBtn = document.getElementById('startBtn');
@@ -515,28 +670,119 @@
   oneClickModeToggle.addEventListener('change', syncStatsDetailVisibility);
   syncStatsDetailVisibility();
 
+  function getInlineImageLibrary() {
+    const el = document.getElementById('ppp-image-library');
+    if (!el) return [];
+    try {
+      const arr = JSON.parse(el.textContent);
+      return Array.isArray(arr) ? arr.filter((x) => typeof x === 'string' && String(x).trim()) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function libraryImageUrl(filename) {
+    return new URL('images/' + encodeURIComponent(filename), window.location.href).href;
+  }
+
+  async function applyLoadedBitmap(bmpIn) {
+    let bmp = bmpIn;
+    bitmap = scaleBitmapIfNeeded(bmp);
+    if (bmp !== bitmap) bmp.close();
+    displayW = bitmap.width;
+    displayH = bitmap.height;
+    setPuzzleSurroundToTheme();
+    fitCanvasToBitmap();
+    requestAnimationFrame(() => fitCanvasToBitmap());
+    statusText.textContent = 'Image loaded — set puzzle pieces & rounds, then Start';
+    startBtn.disabled = false;
+    gameActive = false;
+    resetStatsDisplay();
+  }
+
+  function closeLibraryModal() {
+    imageLibraryModal.classList.remove('is-open');
+    imageLibraryModal.setAttribute('aria-hidden', 'true');
+  }
+
+  function decodeLibraryImageBitmap(filename) {
+    return new Promise((resolve, reject) => {
+      const im = new Image();
+      im.onload = () => {
+        createImageBitmap(im)
+          .then(resolve)
+          .catch(reject);
+      };
+      im.onerror = () => reject(new Error('Failed to load image'));
+      im.src = libraryImageUrl(filename);
+    });
+  }
+
+  function openLibraryModal() {
+    imageLibraryModal.classList.add('is-open');
+    imageLibraryModal.setAttribute('aria-hidden', 'false');
+    libraryModalGrid.innerHTML = '';
+    libraryModalEmpty.hidden = true;
+    libraryModalStatus.textContent = '';
+    const list = getInlineImageLibrary();
+    if (!list.length) {
+      libraryModalEmpty.hidden = false;
+      return;
+    }
+    for (const name of list) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'library-thumb';
+      btn.title = name;
+      const img = document.createElement('img');
+      img.alt = '';
+      img.loading = 'lazy';
+      img.src = libraryImageUrl(name);
+      btn.appendChild(img);
+      btn.addEventListener('click', async () => {
+        libraryModalStatus.textContent = 'Loading…';
+        try {
+          const bmp = await decodeLibraryImageBitmap(name);
+          await applyLoadedBitmap(bmp);
+          libraryModalStatus.textContent = '';
+          closeLibraryModal();
+        } catch (err) {
+          console.error(err);
+          libraryModalStatus.textContent =
+            'Could not load that image — keep this HTML file and the images folder together.';
+        }
+      });
+      libraryModalGrid.appendChild(btn);
+    }
+    libraryModalStatus.textContent = `${list.length} image${list.length === 1 ? '' : 's'} — tap one`;
+  }
+
   pickImageBtn.addEventListener('click', () => fileInput.click());
+
+  pickLibraryBtn.addEventListener('click', () => {
+    openLibraryModal();
+  });
+
+  libraryModalClose.addEventListener('click', () => closeLibraryModal());
+  libraryModalBackdrop.addEventListener('click', () => closeLibraryModal());
+
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Escape') return;
+    if (!imageLibraryModal.classList.contains('is-open')) return;
+    closeLibraryModal();
+  });
 
   fileInput.addEventListener('change', async (e) => {
     const f = e.target.files && e.target.files[0];
     if (!f) return;
     try {
       const bmp = await createImageBitmap(f);
-      bitmap = scaleBitmapIfNeeded(bmp);
-      if (bmp !== bitmap) bmp.close();
-      displayW = bitmap.width;
-      displayH = bitmap.height;
-      setPuzzleSurroundToTheme();
-      fitCanvasToBitmap();
-      requestAnimationFrame(() => fitCanvasToBitmap());
-      statusText.textContent = 'Image loaded — set puzzle pieces & rounds, then Start';
-      startBtn.disabled = false;
-      gameActive = false;
-      resetStatsDisplay();
+      await applyLoadedBitmap(bmp);
     } catch (err) {
       console.error(err);
       statusText.textContent = 'Could not load image';
     }
+    fileInput.value = '';
   });
 
   function setPuzzleSurroundToTheme() {
