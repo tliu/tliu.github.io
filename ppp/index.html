@@ -672,6 +672,98 @@
     document.documentElement.classList.toggle('game-play-active', Boolean(gameActive));
   }
 
+  let placementAudioCtx = null;
+
+  function getPlacementAudioContext() {
+    if (!placementAudioCtx) {
+      placementAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    return placementAudioCtx;
+  }
+
+  /**
+   * Short rising major chord + sparkle — plays after scheduling so first tap works while suspended.
+   */
+  function playPiecePlacementSound(hit) {
+    const ctx = getPlacementAudioContext();
+
+    const schedule = () => {
+      const now = ctx.currentTime;
+      const master = ctx.createGain();
+      master.connect(ctx.destination);
+
+      if (hit) {
+        master.gain.setValueAtTime(0, now);
+        master.gain.linearRampToValueAtTime(0.42, now + 0.012);
+        master.gain.exponentialRampToValueAtTime(0.001, now + 0.42);
+
+        /** Ascending “coin pickup” glide — instant reward cue */
+        const glide = ctx.createOscillator();
+        const glideGain = ctx.createGain();
+        glide.type = 'sine';
+        glide.frequency.setValueAtTime(392, now);
+        glide.frequency.exponentialRampToValueAtTime(784, now + 0.085);
+        glideGain.gain.setValueAtTime(0.22, now);
+        glideGain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+        glide.connect(glideGain);
+        glideGain.connect(master);
+        glide.start(now);
+        glide.stop(now + 0.16);
+
+        /** Major triad shimmer (E major spread): bright, consonant */
+        const freqs = [659.25, 830.61, 987.77, 1318.51];
+        freqs.forEach((freq, i) => {
+          const osc = ctx.createOscillator();
+          const g = ctx.createGain();
+          osc.type = i === 0 ? 'sine' : 'triangle';
+          osc.frequency.setValueAtTime(freq, now);
+          const t0 = now + 0.028 + i * 0.024;
+          g.gain.setValueAtTime(0, t0);
+          g.gain.linearRampToValueAtTime(0.11, t0 + 0.01);
+          g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.22);
+          osc.connect(g);
+          g.connect(master);
+          osc.start(t0);
+          osc.stop(t0 + 0.28);
+        });
+
+        /** Crisp high ping */
+        const ping = ctx.createOscillator();
+        const pingG = ctx.createGain();
+        ping.type = 'sine';
+        ping.frequency.setValueAtTime(2637, now + 0.05);
+        pingG.gain.setValueAtTime(0, now + 0.048);
+        pingG.gain.linearRampToValueAtTime(0.09, now + 0.056);
+        pingG.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+        ping.connect(pingG);
+        pingG.connect(master);
+        ping.start(now + 0.048);
+        ping.stop(now + 0.2);
+      } else {
+        master.gain.setValueAtTime(0, now);
+        master.gain.linearRampToValueAtTime(0.14, now + 0.008);
+        master.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(180, now);
+        osc.frequency.exponentialRampToValueAtTime(120, now + 0.06);
+        g.gain.setValueAtTime(0.2, now);
+        g.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+        osc.connect(g);
+        g.connect(master);
+        osc.start(now);
+        osc.stop(now + 0.12);
+      }
+    };
+
+    if (ctx.state === 'suspended') {
+      void ctx.resume().then(schedule);
+    } else {
+      schedule();
+    }
+  }
+
   let sumTime = 0;
   let sumEdgeDist = 0;
   let completed = 0;
@@ -1854,6 +1946,7 @@
       lastTime.textContent = fmtSeconds(elapsed);
       lastEdge.textContent = inside ? 'Hit (inside)' : `${edgeDist.toFixed(1)} px from edge`;
       if (!inside) {
+        playPiecePlacementSound(false);
         roundMsg.textContent = `Miss — ${edgeDist.toFixed(1)} px from the nearest edge.`;
         roundMsg.className = 'round-msg bad';
         return;
@@ -1867,6 +1960,7 @@
       roundMsg.textContent = 'Hit — tap was inside the piece outline.';
       roundMsg.className = 'round-msg good';
       roundDurationsMs[currentIndex] = elapsed;
+      playPiecePlacementSound(true);
       flashCorrectRect(piece);
       advanceAfterRound();
       return;
@@ -1888,6 +1982,7 @@
     roundMsg.className = 'round-msg ' + (inside ? 'good' : 'bad');
 
     roundDurationsMs[currentIndex] = elapsed;
+    playPiecePlacementSound(inside);
     flashCorrectRect(piece);
     advanceAfterRound();
   }
