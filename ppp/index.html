@@ -557,6 +557,16 @@
       <input type="text" class="seed-input" id="seedInput" placeholder="e.g. picnic-42" autocomplete="off" spellcheck="false">
     </label>
     <button type="button" class="btn secondary" id="randomSeedBtn" title="Fill with a random seed">Random seed</button>
+    <label title="Sound when your tap lands inside the piece">Hit sound
+      <select id="placementSoundSelect" aria-label="Hit sound">
+        <option value="bell" selected>Bell ding</option>
+        <option value="crunch">Crunch</option>
+        <option value="coin">Coin sparkle</option>
+        <option value="wood">Wood block</option>
+        <option value="laser">Laser ping</option>
+        <option value="mp3">multikill-1.mp3 (file)</option>
+      </select>
+    </label>
     <button type="button" class="btn" id="startBtn" disabled>Start game</button>
   </div>
 
@@ -653,9 +663,12 @@
   const oneClickModeToggle = document.getElementById('oneClickModeToggle');
   const totalTimeLive = document.getElementById('totalTimeLive');
   const statsDetailOneClick = document.getElementById('statsDetailOneClick');
+  const placementSoundSelect = document.getElementById('placementSoundSelect');
 
   const MAX_BITMAP_EDGE = 2048;
   const SIDEBAR_SIDE_KEY = 'ppp-sidebar-side';
+  const PLACEMENT_SOUND_LS_KEY = 'ppp-placement-sound';
+  const PLACEMENT_MP3_PATH = 'multikill-1.mp3';
 
   let bitmap = null;
   let displayW = 0;
@@ -681,79 +694,275 @@
     return placementAudioCtx;
   }
 
-  /**
-   * Short rising major chord + sparkle — plays after scheduling so first tap works while suspended.
-   */
-  function playPiecePlacementSound(hit) {
+  function createNoiseBuffer(audioCtx, durationSec) {
+    const rate = audioCtx.sampleRate;
+    const len = Math.max(1, Math.ceil(rate * durationSec));
+    const buf = audioCtx.createBuffer(1, len, rate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+    return buf;
+  }
+
+  function createBrownNoiseBuffer(audioCtx, durationSec) {
+    const rate = audioCtx.sampleRate;
+    const len = Math.max(1, Math.ceil(rate * durationSec));
+    const buf = audioCtx.createBuffer(1, len, rate);
+    const data = buf.getChannelData(0);
+    let brown = 0;
+    for (let i = 0; i < len; i++) {
+      const white = Math.random() * 2 - 1;
+      brown = (brown + white * 0.055) * 0.965;
+      data[i] = Math.max(-1, Math.min(1, brown * 3.4));
+    }
+    return buf;
+  }
+
+  function makeCrunchWaveShaperCurve(intensity) {
+    const n = 256;
+    const curve = new Float32Array(n);
+    const k = Math.max(1, intensity);
+    for (let i = 0; i < n; i++) {
+      const x = (i / (n - 1)) * 2 - 1;
+      curve[i] = Math.tanh(x * k);
+    }
+    return curve;
+  }
+
+  function playSynthBell(ctx, now) {
+    const master = ctx.createGain();
+    master.gain.value = 0.78;
+    master.connect(ctx.destination);
+
+    const partials = [
+      { f: 598, ratio: 0.986, amp: 0.29, decay: 0.5, delay: 0 },
+      { f: 1245, ratio: 0.989, amp: 0.17, decay: 0.38, delay: 0.0018 },
+      { f: 2688, ratio: 0.991, amp: 0.072, decay: 0.28, delay: 0.0035 },
+    ];
+
+    for (const p of partials) {
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = 'sine';
+      const t0 = now + p.delay;
+      osc.frequency.setValueAtTime(p.f, t0);
+      osc.frequency.exponentialRampToValueAtTime(Math.max(45, p.f * p.ratio), t0 + p.decay * 0.9);
+      g.gain.setValueAtTime(0, t0);
+      g.gain.linearRampToValueAtTime(p.amp, t0 + 0.002);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + p.decay);
+      osc.connect(g);
+      g.connect(master);
+      osc.start(t0);
+      osc.stop(t0 + p.decay + 0.07);
+    }
+
+    const strikeBuf = createNoiseBuffer(ctx, 0.02);
+    const strike = ctx.createBufferSource();
+    strike.buffer = strikeBuf;
+    const strikeBp = ctx.createBiquadFilter();
+    strikeBp.type = 'bandpass';
+    strikeBp.frequency.value = 2650;
+    strikeBp.Q.value = 5.5;
+    const strikeGain = ctx.createGain();
+    strikeGain.gain.setValueAtTime(0, now);
+    strikeGain.gain.linearRampToValueAtTime(0.13, now + 0.0006);
+    strikeGain.gain.exponentialRampToValueAtTime(0.001, now + 0.016);
+    strike.connect(strikeBp);
+    strikeBp.connect(strikeGain);
+    strikeGain.connect(master);
+    strike.start(now);
+    strike.stop(now + 0.022);
+  }
+
+  function playSynthCrunch(ctx, now) {
+    const master = ctx.createGain();
+    master.gain.setValueAtTime(0, now);
+    master.gain.linearRampToValueAtTime(0.58, now + 0.001);
+    master.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
+    master.connect(ctx.destination);
+
+    const dur = 0.16;
+    const buf = createBrownNoiseBuffer(ctx, dur);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.setValueAtTime(780, now);
+    bp.frequency.exponentialRampToValueAtTime(340, now + 0.072);
+    bp.Q.setValueAtTime(1.35, now);
+    const crunch = ctx.createWaveShaper();
+    crunch.curve = makeCrunchWaveShaperCurve(10);
+    crunch.oversample = '4x';
+    src.connect(bp);
+    bp.connect(crunch);
+    crunch.connect(master);
+    src.start(now);
+    src.stop(now + dur);
+
+    const buf2 = createNoiseBuffer(ctx, 0.055);
+    const src2 = ctx.createBufferSource();
+    src2.buffer = buf2;
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 1650;
+    lp.Q.value = 0.5;
+    const crunch2 = ctx.createWaveShaper();
+    crunch2.curve = makeCrunchWaveShaperCurve(12);
+    crunch2.oversample = '4x';
+    const g2 = ctx.createGain();
+    g2.gain.setValueAtTime(0, now);
+    g2.gain.linearRampToValueAtTime(0.28, now + 0.001);
+    g2.gain.exponentialRampToValueAtTime(0.001, now + 0.038);
+    src2.connect(lp);
+    lp.connect(crunch2);
+    crunch2.connect(g2);
+    g2.connect(master);
+    src2.start(now);
+    src2.stop(now + 0.058);
+  }
+
+  /** Quick ascending arpeggio — arcade reward */
+  function playSynthCoin(ctx, now) {
+    const master = ctx.createGain();
+    master.gain.value = 0.72;
+    master.connect(ctx.destination);
+    const steps = [
+      { f: 523.25, delay: 0, amp: 0.2, decay: 0.22 },
+      { f: 659.25, delay: 0.022, amp: 0.18, decay: 0.2 },
+      { f: 783.99, delay: 0.044, amp: 0.16, decay: 0.18 },
+      { f: 1046.5, delay: 0.066, amp: 0.14, decay: 0.16 },
+    ];
+    for (const s of steps) {
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = 'triangle';
+      const t0 = now + s.delay;
+      osc.frequency.setValueAtTime(s.f * 0.92, t0);
+      osc.frequency.exponentialRampToValueAtTime(s.f, t0 + 0.028);
+      g.gain.setValueAtTime(0, t0);
+      g.gain.linearRampToValueAtTime(s.amp, t0 + 0.003);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + s.decay);
+      osc.connect(g);
+      g.connect(master);
+      osc.start(t0);
+      osc.stop(t0 + s.decay + 0.05);
+    }
+  }
+
+  /** Short hollow knock */
+  function playSynthWood(ctx, now) {
+    const master = ctx.createGain();
+    master.gain.value = 0.82;
+    master.connect(ctx.destination);
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(385, now);
+    osc.frequency.exponentialRampToValueAtTime(265, now + 0.085);
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(0.36, now + 0.002);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
+    osc.connect(g);
+    g.connect(master);
+    osc.start(now);
+    osc.stop(now + 0.15);
+
+    const osc2 = ctx.createOscillator();
+    const g2 = ctx.createGain();
+    osc2.type = 'triangle';
+    osc2.frequency.setValueAtTime(770, now);
+    osc2.frequency.exponentialRampToValueAtTime(540, now + 0.06);
+    g2.gain.setValueAtTime(0, now);
+    g2.gain.linearRampToValueAtTime(0.08, now + 0.001);
+    g2.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+    osc2.connect(g2);
+    g2.connect(master);
+    osc2.start(now);
+    osc2.stop(now + 0.1);
+  }
+
+  /** Bright upward sweep — sci‑fi UI */
+  function playSynthLaser(ctx, now) {
+    const master = ctx.createGain();
+    master.gain.setValueAtTime(0, now);
+    master.gain.linearRampToValueAtTime(0.34, now + 0.001);
+    master.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
+    master.connect(ctx.destination);
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(620, now);
+    osc.frequency.exponentialRampToValueAtTime(2240, now + 0.056);
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(900, now);
+    lp.frequency.exponentialRampToValueAtTime(7200, now + 0.052);
+    lp.Q.value = 1.1;
+    osc.connect(lp);
+    lp.connect(master);
+    osc.start(now);
+    osc.stop(now + 0.105);
+
+    const ping = ctx.createOscillator();
+    const pg = ctx.createGain();
+    ping.type = 'sine';
+    ping.frequency.setValueAtTime(3520, now + 0.012);
+    pg.gain.setValueAtTime(0, now + 0.01);
+    pg.gain.linearRampToValueAtTime(0.06, now + 0.014);
+    pg.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+    ping.connect(pg);
+    pg.connect(master);
+    ping.start(now + 0.01);
+    ping.stop(now + 0.08);
+  }
+
+  let placementMp3Audio = null;
+
+  function getPlacementMp3Audio() {
+    if (!placementMp3Audio) {
+      placementMp3Audio = new Audio(PLACEMENT_MP3_PATH);
+      placementMp3Audio.preload = 'auto';
+    }
+    return placementMp3Audio;
+  }
+
+  function playPlacementFromMp3() {
+    const a = getPlacementMp3Audio();
+    try {
+      a.pause();
+      a.currentTime = 0;
+    } catch (_) {}
+    void a.play().catch(() => {});
+  }
+
+  function playPiecePlacementSound() {
+    const mode = placementSoundSelect.value;
+    if (mode === 'mp3') {
+      playPlacementFromMp3();
+      return;
+    }
+
     const ctx = getPlacementAudioContext();
 
     const schedule = () => {
       const now = ctx.currentTime;
-      const master = ctx.createGain();
-      master.connect(ctx.destination);
-
-      if (hit) {
-        master.gain.setValueAtTime(0, now);
-        master.gain.linearRampToValueAtTime(0.42, now + 0.012);
-        master.gain.exponentialRampToValueAtTime(0.001, now + 0.42);
-
-        /** Ascending “coin pickup” glide — instant reward cue */
-        const glide = ctx.createOscillator();
-        const glideGain = ctx.createGain();
-        glide.type = 'sine';
-        glide.frequency.setValueAtTime(392, now);
-        glide.frequency.exponentialRampToValueAtTime(784, now + 0.085);
-        glideGain.gain.setValueAtTime(0.22, now);
-        glideGain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
-        glide.connect(glideGain);
-        glideGain.connect(master);
-        glide.start(now);
-        glide.stop(now + 0.16);
-
-        /** Major triad shimmer (E major spread): bright, consonant */
-        const freqs = [659.25, 830.61, 987.77, 1318.51];
-        freqs.forEach((freq, i) => {
-          const osc = ctx.createOscillator();
-          const g = ctx.createGain();
-          osc.type = i === 0 ? 'sine' : 'triangle';
-          osc.frequency.setValueAtTime(freq, now);
-          const t0 = now + 0.028 + i * 0.024;
-          g.gain.setValueAtTime(0, t0);
-          g.gain.linearRampToValueAtTime(0.11, t0 + 0.01);
-          g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.22);
-          osc.connect(g);
-          g.connect(master);
-          osc.start(t0);
-          osc.stop(t0 + 0.28);
-        });
-
-        /** Crisp high ping */
-        const ping = ctx.createOscillator();
-        const pingG = ctx.createGain();
-        ping.type = 'sine';
-        ping.frequency.setValueAtTime(2637, now + 0.05);
-        pingG.gain.setValueAtTime(0, now + 0.048);
-        pingG.gain.linearRampToValueAtTime(0.09, now + 0.056);
-        pingG.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
-        ping.connect(pingG);
-        pingG.connect(master);
-        ping.start(now + 0.048);
-        ping.stop(now + 0.2);
-      } else {
-        master.gain.setValueAtTime(0, now);
-        master.gain.linearRampToValueAtTime(0.14, now + 0.008);
-        master.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
-        const osc = ctx.createOscillator();
-        const g = ctx.createGain();
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(180, now);
-        osc.frequency.exponentialRampToValueAtTime(120, now + 0.06);
-        g.gain.setValueAtTime(0.2, now);
-        g.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
-        osc.connect(g);
-        g.connect(master);
-        osc.start(now);
-        osc.stop(now + 0.12);
+      switch (mode) {
+        case 'crunch':
+          playSynthCrunch(ctx, now);
+          break;
+        case 'coin':
+          playSynthCoin(ctx, now);
+          break;
+        case 'wood':
+          playSynthWood(ctx, now);
+          break;
+        case 'laser':
+          playSynthLaser(ctx, now);
+          break;
+        case 'bell':
+        default:
+          playSynthBell(ctx, now);
+          break;
       }
     };
 
@@ -1946,7 +2155,6 @@
       lastTime.textContent = fmtSeconds(elapsed);
       lastEdge.textContent = inside ? 'Hit (inside)' : `${edgeDist.toFixed(1)} px from edge`;
       if (!inside) {
-        playPiecePlacementSound(false);
         roundMsg.textContent = `Miss — ${edgeDist.toFixed(1)} px from the nearest edge.`;
         roundMsg.className = 'round-msg bad';
         return;
@@ -1960,7 +2168,7 @@
       roundMsg.textContent = 'Hit — tap was inside the piece outline.';
       roundMsg.className = 'round-msg good';
       roundDurationsMs[currentIndex] = elapsed;
-      playPiecePlacementSound(true);
+      playPiecePlacementSound();
       flashCorrectRect(piece);
       advanceAfterRound();
       return;
@@ -1982,7 +2190,7 @@
     roundMsg.className = 'round-msg ' + (inside ? 'good' : 'bad');
 
     roundDurationsMs[currentIndex] = elapsed;
-    playPiecePlacementSound(inside);
+    if (inside) playPiecePlacementSound();
     flashCorrectRect(piece);
     advanceAfterRound();
   }
@@ -2011,6 +2219,19 @@
     requestAnimationFrame(() => {
       if (bitmap) fitCanvasToBitmap();
     });
+  });
+
+  const placementSoundAllowed = new Set(['bell', 'crunch', 'coin', 'wood', 'laser', 'mp3']);
+  try {
+    const savedPlacement = localStorage.getItem(PLACEMENT_SOUND_LS_KEY);
+    if (savedPlacement && placementSoundAllowed.has(savedPlacement)) {
+      placementSoundSelect.value = savedPlacement;
+    }
+  } catch (_) {}
+  placementSoundSelect.addEventListener('change', () => {
+    try {
+      localStorage.setItem(PLACEMENT_SOUND_LS_KEY, placementSoundSelect.value);
+    } catch (_) {}
   });
 
   syncPlayUiMode();
