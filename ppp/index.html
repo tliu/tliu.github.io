@@ -596,6 +596,11 @@
   let gameSessionStartMs = null;
   let totalTimeTickerId = null;
 
+  /** ms spent on each round index (parallel to `queue`). */
+  let roundDurationsMs = [];
+  /** After session end, main canvas shows outlines + times until a new image or game. */
+  let sessionRecapActive = false;
+
   /** DPR used for main canvas backing store (matches ctx transform). */
   let canvasDpr = 1;
 
@@ -844,7 +849,9 @@
     ctx.setTransform(canvasDpr, 0, 0, canvasDpr, 0, 0);
     syncViewLayout();
     drawFullReference();
-    if (gameActive && currentIndex >= 0) {
+    if (sessionRecapActive) {
+      paintSessionRecapDecorations();
+    } else if (gameActive && currentIndex >= 0 && currentIndex < queue.length) {
       drawPiecePreview(pieces[queue[currentIndex]]);
     }
   }
@@ -1292,6 +1299,69 @@
     return p;
   }
 
+  function bmpPointToCss(px, py) {
+    const sx = viewDw / displayW;
+    const sy = viewDh / displayH;
+    return { x: px * sx + viewOx, y: py * sy + viewOy };
+  }
+
+  /** Stroke session pieces + time labels (call after `drawFullReference`). */
+  function paintSessionRecapDecorations() {
+    if (!bitmap || !queue.length || !sessionRecapActive) return;
+    const dupOnPiece = {};
+    ctx.save();
+    for (let r = 0; r < queue.length; r++) {
+      const ms = roundDurationsMs[r];
+      if (ms == null || !Number.isFinite(ms)) continue;
+      const pieceIdx = queue[r];
+      const piece = pieces[pieceIdx];
+      if (!piece) continue;
+      const pCss = pathBmpToCss(piece.pathBmp);
+      /** `difference` + white inverts underlying pixels → photographic negative along the edge. */
+      ctx.save();
+      ctx.globalCompositeOperation = 'difference';
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 3;
+      ctx.lineJoin = 'round';
+      ctx.miterLimit = 2;
+      ctx.stroke(pCss);
+      ctx.restore();
+
+      dupOnPiece[pieceIdx] = (dupOnPiece[pieceIdx] || 0) + 1;
+      const k = dupOnPiece[pieceIdx];
+      let { x, y } = bmpPointToCss(piece.cx, piece.cy);
+      if (k > 1) {
+        const step = 28;
+        x += Math.cos((k - 1) * 1.08) * step * 0.9;
+        y += Math.sin((k - 1) * 1.08) * step * 0.9;
+      }
+
+      const secStr = (ms / 1000).toFixed(2) + ' s';
+      const roundStr = 'Round ' + String(r + 1);
+
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const drawLabel = (text, ly, sizePx, weight) => {
+        ctx.font = `${weight} ${sizePx}px system-ui, -apple-system, sans-serif`;
+        ctx.lineWidth = Math.max(4, sizePx * 0.28);
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.82)';
+        ctx.strokeText(text, x, ly);
+        ctx.fillStyle = '#f1f5f9';
+        ctx.fillText(text, x, ly);
+      };
+      drawLabel(secStr, y - 14, 18, '600');
+      drawLabel(roundStr, y + 14, 13, '500');
+    }
+    ctx.restore();
+  }
+
+  function drawSessionRecapOverlay() {
+    sessionRecapActive = true;
+    drawFullReference();
+    paintSessionRecapDecorations();
+  }
+
   function buildPieces() {
     const dim = dimensionsFromPieceCount(pieceCountInput.value, displayW, displayH);
     rows = dim.rows;
@@ -1369,6 +1439,8 @@
     sumEdgeDist = 0;
     completed = 0;
     sessionHits = 0;
+    roundDurationsMs = [];
+    sessionRecapActive = false;
     gameActive = true;
     gameSessionStartMs = performance.now();
     startTotalTimeTicker();
@@ -1380,6 +1452,8 @@
 
   function resetStatsDisplay() {
     hideSessionSummary();
+    sessionRecapActive = false;
+    roundDurationsMs = [];
     stopTotalTimeTicker();
     gameSessionStartMs = null;
     gridInfo.textContent = '—';
@@ -1668,6 +1742,7 @@
           summary.piecesPerMin = (queue.length / wallMs) * 60000;
         }
         renderSessionSummary(summary);
+        drawSessionRecapOverlay();
       }
     }, 700);
   }
@@ -1703,6 +1778,7 @@
       avgEdge.textContent = (sumEdgeDist / completed).toFixed(1) + ' px';
       roundMsg.textContent = 'Hit — tap was inside the piece outline.';
       roundMsg.className = 'round-msg good';
+      roundDurationsMs[currentIndex] = elapsed;
       flashCorrectRect(piece);
       advanceAfterRound();
       return;
@@ -1723,6 +1799,7 @@
       : `Miss — ${edgeDist.toFixed(1)} px from the nearest edge.`;
     roundMsg.className = 'round-msg ' + (inside ? 'good' : 'bad');
 
+    roundDurationsMs[currentIndex] = elapsed;
     flashCorrectRect(piece);
     advanceAfterRound();
   }
